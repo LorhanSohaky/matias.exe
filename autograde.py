@@ -37,7 +37,7 @@ def main():
         os.kill(pid, signal.SIGKILL)
         os.waitpid(pid, 0)
 
-    print(json.dumps({'scores':scores}))
+    print(json.dumps({'scores': scores}))
 
 
 if __name__ == '__main__':
