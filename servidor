@@ -1,0 +1,80 @@
+#!/usr/bin/python3
+
+import socket
+import threading
+
+
+HOST = 'localhost'
+PORT = 7000
+MAX_LISTEN = 5
+END_OF_MESSAGE = b'\n'
+MAX_BUFFER_SIZE = 6144
+
+
+class Server:
+    def __init__(self):
+        print('Iniciando servidor!')
+        self.clients = []
+        self.clients_ready_to_response = []
+        self.inputs = {}
+        self.usernames = {}
+        self.socket_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # Do not use SO_REUSEADDR in production enviroment
+        self.socket_server.setsockopt(
+            socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.socket_server.bind((HOST, PORT))
+        self.socket_server.listen(MAX_LISTEN)
+
+    def accept_connection(self):
+        connection = self.socket_server.accept()[0]
+        self.clients.append(connection)
+        self.inputs[connection] = b''
+
+    def response_clients(self):
+        for client in self.clients_ready_to_response:
+            data = self.inputs[client]
+            while END_OF_MESSAGE in data:
+                self.send_message(client, b'/error\n')
+                data = data[data.index(END_OF_MESSAGE)+1:]
+
+            self.inputs[client] = b''
+            self.clients_ready_to_response.remove(client)
+
+    def send_message(self, client, message):
+        connection = client
+        connection.send(message)
+
+    def receive_inputs_from_clients(self):
+        for client in self.clients:
+            self.read_message(client)
+
+    def read_message(self, client):
+        connection = client
+
+        input_data = connection.recv(2048)
+        previous_data = self.inputs[connection]
+        data = previous_data + input_data
+
+        # Check size to prevent overflow
+        if len(data) >= MAX_BUFFER_SIZE:
+            data = input_data
+
+        self.inputs[connection] = data
+
+        if data.find(END_OF_MESSAGE) != -1:
+            self.clients_ready_to_response.append(connection)
+        elif len(input_data) == 0:
+            connection.close()
+            self.clients.remove(client)
+
+
+def main():
+    server = Server()
+    server.accept_connection()
+    while True:
+        server.receive_inputs_from_clients()
+        server.response_clients()
+
+
+if __name__ == '__main__':
+    main()
