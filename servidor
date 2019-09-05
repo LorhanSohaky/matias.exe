@@ -29,7 +29,6 @@ class Server:
     def accept_connection(self):
         connection = self.socket_server.accept()[0]
         self.clients.append(connection)
-        connection.setblocking(0)
         self.inputs[connection] = b''
 
     def response_clients(self):
