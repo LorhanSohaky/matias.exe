@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import select
 import socket
 import threading
 
@@ -44,10 +45,6 @@ class Server:
         connection = client
         connection.send(message)
 
-    def receive_inputs_from_clients(self):
-        for client in self.clients:
-            self.read_message(client)
-
     def read_message(self, client):
         connection = client
 
@@ -67,14 +64,27 @@ class Server:
             connection.close()
             self.clients.remove(client)
 
+    def multiplex_client(self):
+        sockets = self.clients
+        sockets.append(self.socket_server)
+        while sockets:
+            ready_to_read, ready_to_write, exception =  select.select(sockets, self.clients_ready_to_response, [])
+
+            for socket in ready_to_read:
+                if socket is self.socket_server:
+                    self.accept_connection()
+                else:
+                    self.read_message(socket)
+
+            self.response_clients()
+            sockets = self.clients
+
+    def has_clients(self):
+        return len(self.clients)
 
 def main():
     server = Server()
-    server.accept_connection()
-    while True:
-        server.receive_inputs_from_clients()
-        server.response_clients()
-
+    server.multiplex_client()
 
 if __name__ == '__main__':
     main()
