@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 import socket, base64, os
 def myrand(n=512):
     return base64.b32encode(os.urandom(n))

@@ -1,8 +1,9 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 import os
 import signal
 import json
 import subprocess
+import time
 
 
 def main():
@@ -19,6 +20,7 @@ def main():
         testno = i + 1
         pid = os.spawnlp(os.P_NOWAIT, './servidor', './servidor')
         print('\nServidor executando no pid=%d' % pid)
+        time.sleep(.5)
 
         test = 'test%d' % testno
         scores[test] = 0
@@ -37,7 +39,7 @@ def main():
         os.kill(pid, signal.SIGKILL)
         os.waitpid(pid, 0)
 
-    print(json.dumps({'scores': scores}))
+    print(json.dumps({'scores':scores}))
 
 
 if __name__ == '__main__':
