@@ -18,6 +18,7 @@ class Server:
         self.clients = []
         self.clients_ready_to_response = []
         self.inputs = {}
+        self.outputs = {}
         self.usernames = {}
         self.socket_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         # Do not use SO_REUSEADDR in production enviroment
@@ -35,14 +36,16 @@ class Server:
         for client in self.clients_ready_to_response:
             data = self.inputs[client]
             while END_OF_MESSAGE in data:
-                self.send_message(client, b'/error\n')
+                self.send_message(client)
                 data = data[data.index(END_OF_MESSAGE)+1:]
 
             self.inputs[client] = b''
             self.clients_ready_to_response.remove(client)
 
-    def send_message(self, client, message):
+    def send_message(self, client):
         connection = client
+        self.protocol(client)
+        message = self.outputs[client]
         connection.send(message)
 
     def read_message(self, client):
@@ -81,6 +84,27 @@ class Server:
 
     def has_clients(self):
         return len(self.clients)
+
+    def protocol(self, client):
+        if self.inputs[client].startswith(b'/nick'):
+            self.inputs[client] = b''.join(self.inputs[client].split(b'/nick '))
+            if b':' in self.inputs[client] or b' ' in self.inputs[client]:
+                self.outputs[client] = b'/error\n'
+            elif self.inputs[client] in self.usernames.values():
+                self.outputs[client] = b'/error\n'
+            else:
+                if client in self.usernames:
+                    self.outputs[client] = b'/renamed', self.usernames[client].replace(b'\n', b''), self.inputs[client]
+                else:
+                    self.outputs[client] = b'/joined', self.inputs[client]
+                self.outputs[client] = b' '.join(self.outputs[client])
+                self.usernames[client] = self.inputs[client]
+        else:
+            if client in self.usernames:
+                self.outputs[client] = self.usernames[client].replace(b'\n', b''), self.inputs[client]
+                self.outputs[client] = b': '.join(self.outputs[client])
+            else:
+                self.outputs[client] = b'/error\n'
 
 def main():
     server = Server()
