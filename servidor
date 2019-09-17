@@ -32,21 +32,13 @@ class Server:
         self.clients.append(connection)
         self.inputs[connection] = b''
 
-    def response_clients(self):
-        for client in self.clients_ready_to_response:
-            data = self.inputs.get(client, b'')
-            while END_OF_MESSAGE in data:
-                self.send_message(client)
-                data = data[data.index(END_OF_MESSAGE)+1:]
-
-            self.inputs[client] = b''
-            self.clients_ready_to_response.remove(client)
-
     def send_message(self, client):
         connection = client
-        self.protocol(client)
         message = self.outputs[client]
         connection.send(message)
+        self.clients_ready_to_response.remove(client)
+        self.inputs[client] = b''
+        self.outputs[client] = b''
 
     def read_message(self, client):
         connection = client
@@ -62,13 +54,23 @@ class Server:
         self.inputs[connection] = data
 
         if data.find(END_OF_MESSAGE) != -1:
-            self.clients_ready_to_response.append(connection)
+            self.protocol(client)
+            if not client in self.clients_ready_to_response:
+                self.clients_ready_to_response.append(connection)
         elif len(input_data) == 0:
-            connection.close()
             self.clients.remove(client)
+            connection.close()
+            del self.inputs[client]
+            del self.outputs[client]
+            if client in self.clients_ready_to_response:
+                self.clients_ready_to_response.remove(client)
+            if client in self.usernames:
+                message = b'/quit ' + self.usernames[client]+b'\n'
+                del self.usernames[client]
+                self.broadcast(message)
 
     def multiplex_client(self):
-        sockets = self.clients
+        sockets = self.clients.copy()
         sockets.append(self.socket_server)
         while sockets:
             ready_to_read, ready_to_write, exception = select.select(
@@ -80,34 +82,34 @@ class Server:
                 else:
                     self.read_message(socket)
 
-            self.response_clients()
-            sockets = self.clients
+            for socket in ready_to_write:
+                self.send_message(socket)
+            sockets = self.clients.copy()
+            sockets.append(self.socket_server)
 
     def has_clients(self):
         return len(self.clients)
 
     def protocol(self, client):
         if self.inputs[client].startswith(b'/nick'):
-            self.inputs[client] = b''.join(
-                self.inputs[client].split(b'/nick '))
-            if b':' in self.inputs[client] or b' ' in self.inputs[client]:
+            nick = b''.join(self.inputs[client].split(b'/nick '))
+            nick = nick.replace(b'\n', b'')
+            if b':' in self.inputs[client] or b' ' in nick:
                 self.outputs[client] = b'/error\n'
-            elif self.inputs[client] in self.usernames.values():
+            elif nick in self.usernames.values():
                 self.outputs[client] = b'/error\n'
             else:
-                message = b''
                 if client in self.usernames:
-                    message = b'/renamed', self.usernames[client].replace(
-                        b'\n', b''), self.inputs[client]
+                    message = b'/renamed ' + \
+                        self.usernames[client] + b' ' + nick + b'\n'
                 else:
-                    message = b'/joined', self.inputs[client]
-                message = b' '.join(message)
-                self.usernames[client] = self.inputs[client]
+                    message = b'/joined ' + nick + b'\n'
+                self.usernames[client] = nick
                 self.broadcast(message)
         else:
+            message = b''
             if client in self.usernames:
-                message = self.usernames[client].replace(
-                    b'\n', b''), self.inputs[client]
+                message = self.usernames[client], self.inputs[client]
                 message = b': '.join(message)
                 self.broadcast(message)
             else:
@@ -116,8 +118,7 @@ class Server:
     def broadcast(self, message):
         for client in self.clients:
             self.outputs[client] = message
-            if client not in self.clients_ready_to_response:
-                self.clients_ready_to_response.append(client)
+            self.clients_ready_to_response.append(client)
 
 
 def main():
