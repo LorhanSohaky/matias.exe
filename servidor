@@ -34,7 +34,7 @@ class Server:
 
     def response_clients(self):
         for client in self.clients_ready_to_response:
-            data = self.inputs[client]
+            data = self.inputs.get(client, b'')
             while END_OF_MESSAGE in data:
                 self.send_message(client)
                 data = data[data.index(END_OF_MESSAGE)+1:]
@@ -71,7 +71,8 @@ class Server:
         sockets = self.clients
         sockets.append(self.socket_server)
         while sockets:
-            ready_to_read, ready_to_write, exception =  select.select(sockets, self.clients_ready_to_response, [])
+            ready_to_read, ready_to_write, exception = select.select(
+                sockets, self.clients_ready_to_response, [])
 
             for socket in ready_to_read:
                 if socket is self.socket_server:
@@ -87,28 +88,42 @@ class Server:
 
     def protocol(self, client):
         if self.inputs[client].startswith(b'/nick'):
-            self.inputs[client] = b''.join(self.inputs[client].split(b'/nick '))
+            self.inputs[client] = b''.join(
+                self.inputs[client].split(b'/nick '))
             if b':' in self.inputs[client] or b' ' in self.inputs[client]:
                 self.outputs[client] = b'/error\n'
             elif self.inputs[client] in self.usernames.values():
                 self.outputs[client] = b'/error\n'
             else:
+                message = b''
                 if client in self.usernames:
-                    self.outputs[client] = b'/renamed', self.usernames[client].replace(b'\n', b''), self.inputs[client]
+                    message = b'/renamed', self.usernames[client].replace(
+                        b'\n', b''), self.inputs[client]
                 else:
-                    self.outputs[client] = b'/joined', self.inputs[client]
-                self.outputs[client] = b' '.join(self.outputs[client])
+                    message = b'/joined', self.inputs[client]
+                message = b' '.join(message)
                 self.usernames[client] = self.inputs[client]
+                self.broadcast(message)
         else:
             if client in self.usernames:
-                self.outputs[client] = self.usernames[client].replace(b'\n', b''), self.inputs[client]
-                self.outputs[client] = b': '.join(self.outputs[client])
+                message = self.usernames[client].replace(
+                    b'\n', b''), self.inputs[client]
+                message = b': '.join(message)
+                self.broadcast(message)
             else:
                 self.outputs[client] = b'/error\n'
+
+    def broadcast(self, message):
+        for client in self.clients:
+            self.outputs[client] = message
+            if client not in self.clients_ready_to_response:
+                self.clients_ready_to_response.append(client)
+
 
 def main():
     server = Server()
     server.multiplex_client()
+
 
 if __name__ == '__main__':
     main()
