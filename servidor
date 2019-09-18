@@ -42,8 +42,11 @@ class Server:
 
     def read_message(self, client):
         connection = client
-
-        input_data = connection.recv(2048)
+        input_data = b''
+        try:
+            input_data = connection.recv(2048)
+        except ConnectionResetError:
+            pass
         previous_data = self.inputs[connection]
         data = previous_data + input_data
 
