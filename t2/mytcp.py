@@ -30,12 +30,12 @@ class Servidor:
         id_conexao = (src_addr, src_port, dst_addr, dst_port)
 
         if (flags & FLAGS_SYN) == FLAGS_SYN:
+            meu_seq_no = random.randint(1, 0xffff)
             # A flag SYN estar setada significa que é um cliente tentando estabelecer uma conexão nova
             # TODO: talvez você precise passar mais coisas para o construtor de conexão
-            conexao = self.conexoes[id_conexao] = Conexao(self, id_conexao)
+            conexao = self.conexoes[id_conexao] = Conexao(self, id_conexao, seq_no+1)
             # TODO: você precisa fazer o handshake aceitando a conexão. Escolha se você acha melhor
             # fazer aqui mesmo ou dentro da classe Conexao.
-            meu_seq_no = random.randint(1, 0xffff)
             dados = make_header(dst_port, src_port,meu_seq_no,seq_no+1,FLAGS_SYN + FLAGS_ACK)
             dados = fix_checksum(dados, src_addr, dst_addr)
             conexao.enviar(dados)
@@ -50,11 +50,12 @@ class Servidor:
 
 
 class Conexao:
-    def __init__(self, servidor, id_conexao):
+    def __init__(self, servidor, id_conexao, expectedseqnum):
         self.servidor = servidor
         self.id_conexao = id_conexao
         self.callback = None
         self.timer = asyncio.get_event_loop().call_later(1, self._exemplo_timer)  # um timer pode ser criado assim; esta linha é só um exemplo e pode ser removida
+        self.expectedseqnum = expectedseqnum
         #self.timer.cancel()   # é possível cancelar o timer chamando esse método; esta linha é só um exemplo e pode ser removida
 
     def _exemplo_timer(self):
@@ -66,6 +67,17 @@ class Conexao:
         # Chame self.callback(self, dados) para passar dados para a camada de aplicação após
         # garantir que eles não sejam duplicados e que tenham sido recebidos em ordem.
         print('recebido payload: %r' % payload)
+        
+        src_addr, src_port, dst_addr, dst_port = self.id_conexao
+        
+        if self.expectedseqnum == seq_no:
+            self.expectedseqnum = seq_no + len(payload)
+            self.callback(self, payload)
+            dados = make_header(src_port, dst_port, self.expectedseqnum, self.expectedseqnum, flags)
+            dados = fix_checksum(dados, src_addr,dst_addr)
+            self.enviar(dados)
+        else:
+            self.callback(self, b'')
 
     # Os métodos abaixo fazem parte da API
 
