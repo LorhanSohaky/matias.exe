@@ -1,5 +1,6 @@
 import asyncio
 from mytcputils import *
+import random
 
 
 class Servidor:
@@ -34,6 +35,10 @@ class Servidor:
             conexao = self.conexoes[id_conexao] = Conexao(self, id_conexao)
             # TODO: você precisa fazer o handshake aceitando a conexão. Escolha se você acha melhor
             # fazer aqui mesmo ou dentro da classe Conexao.
+            meu_seq_no = random.randint(1, 0xffff)
+            dados = make_header(dst_port, src_port,meu_seq_no,seq_no+1,FLAGS_SYN + FLAGS_ACK)
+            dados = fix_checksum(dados, src_addr, dst_addr)
+            conexao.enviar(dados)
             if self.callback:
                 self.callback(conexao)
         elif id_conexao in self.conexoes:
@@ -78,7 +83,8 @@ class Conexao:
         # TODO: implemente aqui o envio de dados.
         # Chame self.servidor.rede.enviar(segmento, dest_addr) para enviar o segmento
         # que você construir para a camada de rede.
-        pass
+        dest_addr = self.id_conexao[0]
+        self.servidor.rede.enviar(dados, dest_addr)
 
     def fechar(self):
         """
