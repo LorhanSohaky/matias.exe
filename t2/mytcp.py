@@ -36,7 +36,7 @@ class Servidor:
             conexao = self.conexoes[id_conexao] = Conexao(self, id_conexao, seq_no+1)
             # TODO: você precisa fazer o handshake aceitando a conexão. Escolha se você acha melhor
             # fazer aqui mesmo ou dentro da classe Conexao.
-            dados = make_header(dst_port, src_port,meu_seq_no,seq_no+1,FLAGS_SYN + FLAGS_ACK)
+            dados = make_header(dst_port, src_port,meu_seq_no,seq_no+1,FLAGS_SYN | FLAGS_ACK)
             dados = fix_checksum(dados, src_addr, dst_addr)
             conexao.enviar(dados)
             if self.callback:
@@ -103,14 +103,15 @@ class Conexao:
         seq_no = self.nextseqnum
         ack_no = self.expectedseqnum
         
-        cabecalho = make_header(src_port, dst_port, seq_no, ack_no, flags or FLAGS_ACK)
         if flags & FLAGS_SYN == FLAGS_SYN:
+            cabecalho = make_header(src_port, dst_port, seq_no, ack_no, FLAGS_ACK)
             dados = fix_checksum(cabecalho, src_addr, dst_addr)
             self.servidor.rede.enviar(dados, src_addr)
         else:
+            cabecalho = make_header(src_port, dst_port, seq_no, ack_no, FLAGS_ACK)
             dados = fix_checksum(cabecalho + dados, src_addr, dst_addr)
             self.servidor.rede.enviar(dados, src_addr)
-        
+
 
     def fechar(self):
         """
