@@ -56,6 +56,7 @@ class Conexao:
         self.callback = None
         self.timer = asyncio.get_event_loop().call_later(1, self._exemplo_timer)  # um timer pode ser criado assim; esta linha é só um exemplo e pode ser removida
         self.expectedseqnum = expectedseqnum
+        self.nextseqnum = random.randint(1,0xffff)
         #self.timer.cancel()   # é possível cancelar o timer chamando esse método; esta linha é só um exemplo e pode ser removida
 
     def _exemplo_timer(self):
@@ -73,12 +74,12 @@ class Conexao:
         if self.expectedseqnum == seq_no:
             self.expectedseqnum = seq_no + len(payload)
             self.callback(self, payload)
+            self.nextseqnum = ack_no
             dados = make_header(src_port, dst_port, self.expectedseqnum, self.expectedseqnum, flags)
             dados = fix_checksum(dados, src_addr,dst_addr)
             self.enviar(dados)
         else:
             self.callback(self, b'')
-
     # Os métodos abaixo fazem parte da API
 
     def registrar_recebedor(self, callback):
@@ -95,8 +96,21 @@ class Conexao:
         # TODO: implemente aqui o envio de dados.
         # Chame self.servidor.rede.enviar(segmento, dest_addr) para enviar o segmento
         # que você construir para a camada de rede.
-        dest_addr = self.id_conexao[0]
-        self.servidor.rede.enviar(dados, dest_addr)
+        tamanho_dados = len(dados)
+        src_addr, src_port, dst_addr, dst_port = self.id_conexao
+        src_port, dst_port, seq_no, ack_no, \
+        flags, window_size, checksum, urg_ptr = read_header(dados)
+        seq_no = self.nextseqnum
+        ack_no = self.expectedseqnum
+        
+        cabecalho = make_header(src_port, dst_port, seq_no, ack_no, flags or FLAGS_ACK)
+        if flags & FLAGS_SYN == FLAGS_SYN:
+            dados = fix_checksum(cabecalho, src_addr, dst_addr)
+            self.servidor.rede.enviar(dados, src_addr)
+        else:
+            dados = fix_checksum(cabecalho + dados, src_addr, dst_addr)
+            self.servidor.rede.enviar(dados, src_addr)
+        
 
     def fechar(self):
         """
