@@ -67,7 +67,7 @@ class Conexao:
         # TODO: trate aqui o recebimento de segmentos provenientes da camada de rede.
         # Chame self.callback(self, dados) para passar dados para a camada de aplicação após
         # garantir que eles não sejam duplicados e que tenham sido recebidos em ordem.
-        print('recebido payload: %r' % payload)
+        #print('recebido payload: %r' % payload)
         
         src_addr, src_port, dst_addr, dst_port = self.id_conexao
         
@@ -89,28 +89,42 @@ class Conexao:
         """
         self.callback = callback
 
-    def enviar(self, dados):
+    def enviar(self, payload):
         """
         Usado pela camada de aplicação para enviar dados
         """
         # TODO: implemente aqui o envio de dados.
         # Chame self.servidor.rede.enviar(segmento, dest_addr) para enviar o segmento
         # que você construir para a camada de rede.
-        tamanho_dados = len(dados)
         src_addr, src_port, dst_addr, dst_port = self.id_conexao
-        src_port, dst_port, seq_no, ack_no, \
-        flags, window_size, checksum, urg_ptr = read_header(dados)
+        src_port, dst_port, seq_no, ack_no, flags, window_size, checksum, urg_ptr = read_header(payload)
         seq_no = self.nextseqnum
         ack_no = self.expectedseqnum
         
         if flags & FLAGS_SYN == FLAGS_SYN:
-            cabecalho = make_header(src_port, dst_port, seq_no, ack_no, FLAGS_ACK)
-            dados = fix_checksum(cabecalho, src_addr, dst_addr)
+            cabecalho = make_header(src_port, dst_port, seq_no, ack_no, flags | FLAGS_ACK)
+            cabecalho = fix_checksum(cabecalho, src_addr, dst_addr)
+            dados = cabecalho
+            if has_payload(payload):
+                dados +=payload
             self.servidor.rede.enviar(dados, src_addr)
         else:
             cabecalho = make_header(src_port, dst_port, seq_no, ack_no, FLAGS_ACK)
-            dados = fix_checksum(cabecalho + dados, src_addr, dst_addr)
-            self.servidor.rede.enviar(dados, src_addr)
+            cabecalho = fix_checksum(cabecalho, src_addr, dst_addr)
+            if len(payload) > MSS:
+                atual = 0
+                tmp_seq_no = seq_no
+                while atual < len(payload):
+                    cabecalho = make_header(dst_port, dst_port, tmp_seq_no, ack_no, FLAGS_ACK)
+                    cabecalho = fix_checksum(cabecalho, src_addr, dst_addr)
+                    self.servidor.rede.enviar(cabecalho + payload[atual:atual+MSS], src_addr)
+                    atual = atual + MSS
+                    tmp_seq_no = tmp_seq_no + MSS
+            else:
+                dados = cabecalho
+                if has_payload(payload):
+                    dados = dados + payload
+                self.servidor.rede.enviar(dados, src_addr)
 
 
     def fechar(self):

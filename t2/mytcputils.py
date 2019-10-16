@@ -78,3 +78,6 @@ def fix_checksum(segment, src_addr, dst_addr):
     seg[16:18] = b'\x00\x00'
     seg[16:18] = struct.pack('!H', calc_checksum(pseudohdr + seg))
     return bytes(seg)
+
+def has_payload(data):
+    return len(data) > 20
