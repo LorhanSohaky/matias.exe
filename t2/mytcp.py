@@ -73,7 +73,7 @@ class Conexao:
         if self.ack_no == seq_no:
             self.ack_no += len(payload)
             if (flags & FLAGS_FIN) == FLAGS_FIN:
-                self.ack_no += 1
+                self.ack_no += 1 # É preciso somar, pois quando é enviada a flag FIN não há payload
                 flags = FLAGS_FIN | FLAGS_ACK
             self.callback(self, payload)
             self.nextseqnum = ack_no
