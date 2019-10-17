@@ -1,6 +1,7 @@
 import asyncio
 from mytcputils import *
 import random
+import math
 
 
 class Servidor:
@@ -66,7 +67,7 @@ class Conexao:
         print('Este é um exemplo de como fazer um timer')
 
     def _rdt_rcv(self, seq_no, ack_no, flags, payload):
-        #print('recebido payload: %r' % payload)
+        # print('recebido payload: %r' % payload)
         
         src_addr, src_port, dst_addr, dst_port = self.id_conexao
         
@@ -75,11 +76,13 @@ class Conexao:
             if (flags & FLAGS_FIN) == FLAGS_FIN:
                 self.ack_no += 1 # É preciso somar, pois quando é enviada a flag FIN não há payload
                 flags = FLAGS_FIN | FLAGS_ACK
+
+            if ((flags & FLAGS_FIN) == FLAGS_FIN) or len(payload) > 0: # Só Deus sabe, mas funciona
+                dados = make_header(src_port, dst_port, self.seq_no, self.ack_no, flags)
+                dados = fix_checksum(dados, src_addr,dst_addr)
+                self.servidor.rede.enviar(dados,src_addr)
+
             self.callback(self, payload)
-            self.nextseqnum = ack_no
-            dados = make_header(src_port, dst_port, self.seq_no, self.ack_no, flags)
-            dados = fix_checksum(dados, src_addr,dst_addr)
-            self.servidor.rede.enviar(dados,src_addr)
 
     def registrar_recebedor(self, callback):
         """
@@ -88,13 +91,22 @@ class Conexao:
         """
         self.callback = callback
 
-    def enviar(self, payload):
+    def enviar(self, dados):
         """
         Usado pela camada de aplicação para enviar dados
         """
-        # TODO: implemente aqui o envio de dados.
-        # Chame self.servidor.rede.enviar(segmento, dest_addr) para enviar o segmento
-        # que você construir para a camada de rede.
+        src_addr, src_port, dst_addr, dst_port = self.id_conexao
+
+        numero_de_segmentos = math.ceil(len(dados) / MSS)
+        if numero_de_segmentos == 0: # Caso seja uma mensagem em que o tamanho dos dados seja < MSS
+            numero_de_segmentos = 1
+        for i in range(numero_de_segmentos):
+            msg = dados[i*MSS:(i+1)*MSS]
+            cabecalho = make_header(dst_port, src_port, self.seq_no, self.ack_no, FLAGS_ACK)
+            segmento = fix_checksum(cabecalho + msg, dst_addr, src_addr)
+            self.servidor.rede.enviar(segmento, src_addr)
+            self.seq_no += len(msg)
+
 
     def fechar(self):
         """
