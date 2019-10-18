@@ -1,5 +1,5 @@
 import asyncio
-from mytcputils import *
+from mytcputils import FLAGS_FIN, FLAGS_SYN, FLAGS_ACK, MSS, make_header, read_header, fix_checksum
 import random
 import math
 
@@ -21,7 +21,7 @@ class Servidor:
 
     def _rdt_rcv(self, src_addr, dst_addr, segment):
         src_port, dst_port, seq_no, ack_no, \
-            flags, window_size, checksum, urg_ptr = read_header(segment)
+            flags, _, _, _ = read_header(segment)
 
         if dst_port != self.porta:
             # Ignora segmentos que não são destinados à porta do nosso servidor
