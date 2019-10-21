@@ -93,20 +93,18 @@ class Conexao:
     def _timeout(self):
         if DEBUG:
             print('---Timeout---')
+        self.timer = None
         self._retransmit()
         self._start_timer()
 
     def _retransmit(self):
-        src_addr, src_port, dst_addr, dst_port = self.id_conexao
         comprimento = min(MSS, len(self.nao_confirmados))
         msg = self.nao_confirmados[:comprimento]
         if DEBUG:
+            _, _, dst_addr, _ = self.id_conexao
             print(dst_addr,'retransmiting:', 'seq->', self.send_base, 'ack->', self.ack_no, 'timer-> %.3f' % self.timeout_interval)
-        cabecalho = make_header(dst_port, src_port, self.send_base, self.ack_no, FLAGS_ACK)
-        segmento = fix_checksum(cabecalho + msg, dst_addr, src_addr)
-        self.servidor.rede.enviar(segmento, src_addr)
-        self._start_timer()
         self.retransmitindo = True
+        self._send_ack_segment(msg)
 
 
 
@@ -164,26 +162,35 @@ class Conexao:
         """
         Usado pela camada de aplicação para enviar dados
         """
-        src_addr, src_port, dst_addr, dst_port = self.id_conexao
-
         numero_de_segmentos = math.ceil(len(dados) / MSS)
         if numero_de_segmentos == 0: # Caso seja uma mensagem em que o tamanho dos dados seja < MSS
             numero_de_segmentos = 1
         for i in range(numero_de_segmentos):
             msg = dados[i*MSS:(i+1)*MSS]
-            cabecalho = make_header(dst_port, src_port, self.seq_no, self.ack_no, FLAGS_ACK)
-            segmento = fix_checksum(cabecalho + msg, dst_addr, src_addr)
-            self.servidor.rede.enviar(segmento, src_addr)
-            self.nao_confirmados = self.nao_confirmados + msg
-            self.seq_no += len(msg)
+            self._send_ack_segment(msg)
             if DEBUG:
+                _, _, dst_addr, _ = self.id_conexao
                 print(dst_addr, 'sending: seq->', self.seq_no, 'ack->', self.ack_no,
-                      'bytes->', len(msg), 'timer-> %.3f' % self.timeout_interval)
+                        'bytes->', len(msg), 'timer-> %.3f' % self.timeout_interval)
 
-            if self.timer is None:
-                print('Timer started')
-                self.initial_moment = time.time()
-                self._start_timer()
+    def _send_ack_segment(self,payload):
+        src_addr, src_port, dst_addr, dst_port = self.id_conexao
+        seq_no = None
+        if self.retransmitindo:
+            seq_no = self.send_base
+        else:
+            seq_no = self.seq_no
+            self.seq_no += len(payload)
+            self.nao_confirmados = self.nao_confirmados + payload
+        cabecalho = make_header(dst_port, src_port, seq_no, self.ack_no, FLAGS_ACK)
+        segmento = fix_checksum(cabecalho + payload, dst_addr, src_addr)
+        self.servidor.rede.enviar(segmento, src_addr)
+
+
+        if self.timer is None:
+            print('Timer started')
+            self.initial_moment = time.time()
+            self._start_timer()
 
 
     def fechar(self):
