@@ -2,6 +2,7 @@ import asyncio
 from mytcputils import FLAGS_FIN, FLAGS_SYN, FLAGS_ACK, MSS, make_header, read_header, fix_checksum
 import random
 import math
+import time
 
 DEBUG = True
 
@@ -54,10 +55,19 @@ class Conexao:
         self.callback = None
         self.timer = None
         self.nao_confirmados = b''
-        self._start_timer()
         self.seq_no = random.randint(1,0xfff)
         self.ack_no = seq_no + 1
         self.send_base = seq_no
+
+        self.first = True
+        self.initial_moment = None
+        self.final_moment = None
+        self.timeout_interval = 2
+        self.sample_rtt = None
+        self.estimated_rtt = None
+        self.dev_rtt = None
+        self.retransmitindo = False
+
         self._start_connection()
 
     def _start_connection(self):
@@ -73,7 +83,7 @@ class Conexao:
 
     def _start_timer(self):
         self._stop_timer()
-        self.timer = asyncio.get_event_loop().call_later(2, self._timeout)
+        self.timer = asyncio.get_event_loop().call_later(self.timeout_interval, self._timeout)
 
     def _stop_timer(self):
         if self.timer:
@@ -91,10 +101,12 @@ class Conexao:
         comprimento = min(MSS, len(self.nao_confirmados))
         msg = self.nao_confirmados[:comprimento]
         if DEBUG:
-            print(dst_addr,'retransmiting:', 'seq->', self.send_base, 'ack->', self.ack_no)
+            print(dst_addr,'retransmiting:', 'seq->', self.send_base, 'ack->', self.ack_no, 'timer-> %.3f' % self.timeout_interval)
         cabecalho = make_header(dst_port, src_port, self.send_base, self.ack_no, FLAGS_ACK)
         segmento = fix_checksum(cabecalho + msg, dst_addr, src_addr)
         self.servidor.rede.enviar(segmento, src_addr)
+        self._start_timer()
+        self.retransmitindo = True
 
 
 
@@ -106,11 +118,22 @@ class Conexao:
             if DEBUG:
                 print(src_addr, 'receiving: seq->', seq_no, 'ack->', ack_no, 'bytes->', len(payload))
 
+            if not self.initial_moment is None:
+                self._stop_timer()
+                print('Timer stopped')
+                if not self.retransmitindo:
+                    self.final_moment = time.time()
+                    self.calc_rtt()
+                    
+                
+
+            self.retransmitindo = False
+
             if self.nao_confirmados:
                 self.nao_confirmados = self.nao_confirmados[ack_no-self.send_base:]
                 self.send_base = ack_no
-            
             if ack_no > self.send_base and (flags & FLAGS_ACK) == FLAGS_ACK:
+                print('aqui')
                 self.send_base = ack_no -1
                 if self.nao_confirmados:
                     self._start_timer()
@@ -154,9 +177,12 @@ class Conexao:
             self.nao_confirmados = self.nao_confirmados + msg
             self.seq_no += len(msg)
             if DEBUG:
-                print(dst_addr,'sending: seq->',self.seq_no, 'ack->',self.ack_no, 'bytes->',len(msg))
+                print(dst_addr, 'sending: seq->', self.seq_no, 'ack->', self.ack_no,
+                      'bytes->', len(msg), 'timer-> %.3f' % self.timeout_interval)
 
-            if not self.timer:
+            if self.timer is None:
+                print('Timer started')
+                self.initial_moment = time.time()
                 self._start_timer()
 
 
@@ -169,3 +195,20 @@ class Conexao:
         cabecalho = fix_checksum(cabecalho, dst_addr, src_addr)
         self.servidor.rede.enviar(cabecalho, src_addr)
 
+    def calc_rtt(self):
+        alfa = 0.125
+        beta = 0.25
+
+        self.sample_rtt = self.final_moment - self.initial_moment
+
+        if self.first:
+            self.first = not self.first
+            
+            self.estimated_rtt = self.sample_rtt
+            self.dev_rtt = self.sample_rtt / 2
+        else:
+            self.estimated_rtt = (1 - alfa) * self.estimated_rtt + alfa * self.sample_rtt
+            self.dev_rtt = (1 - beta) * self.dev_rtt + beta * abs(self.sample_rtt - self.estimated_rtt)
+
+        self.timeout_interval = self.estimated_rtt + 4 * self.dev_rtt
+        print('New timeout %.3f' % self.timeout_interval)
