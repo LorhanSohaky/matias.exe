@@ -121,8 +121,7 @@ class Conexao:
                 self.nao_confirmados = self.nao_confirmados[ack_no-self.send_base:]
                 self.send_base = ack_no
                 if self.nao_confirmados:
-                    if self.retransmitindo:
-                        self._retransmit()
+                    self._start_timer()
                 else:
                     print('Timer stopped')
                     self._stop_timer()
@@ -212,4 +211,5 @@ class Conexao:
             self.dev_rtt = (1 - beta) * self.dev_rtt + beta * abs(self.sample_rtt - self.estimated_rtt)
 
         self.timeout_interval = self.estimated_rtt + 4 * self.dev_rtt
-        print('New timeout %.3f' % self.timeout_interval)
+        if DEBUG:
+            print('New timeout %.3f' % self.timeout_interval)
