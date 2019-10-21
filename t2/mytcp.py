@@ -98,13 +98,14 @@ class Conexao:
         self._start_timer()
 
     def _retransmit(self):
+        self.retransmitindo = True
         comprimento = min(MSS, len(self.nao_confirmados))
         msg = self.nao_confirmados[:comprimento]
         if DEBUG:
             _, _, dst_addr, _ = self.id_conexao
-            print(dst_addr,'retransmiting:', 'seq->', self.send_base, 'ack->', self.ack_no, 'timer-> %.3f' % self.timeout_interval)
-        self.retransmitindo = True
-        self._send_ack_segment(msg)
+            print(dst_addr, 'retransmiting: seq->', self.send_base, 'ack->', self.ack_no,
+                      'bytes->', len(msg), ('timer-> %.3f' % self.timeout_interval) if self.timer is None else ('timer -> anterior'))
+            self._send_ack_segment(msg)
 
 
 
@@ -122,22 +123,17 @@ class Conexao:
                 if not self.retransmitindo:
                     self.final_moment = time.time()
                     self.calc_rtt()
-                    
-                
 
-            self.retransmitindo = False
-
-            if self.nao_confirmados:
+            if ack_no > self.send_base and (flags & FLAGS_ACK) == FLAGS_ACK:
                 self.nao_confirmados = self.nao_confirmados[ack_no-self.send_base:]
                 self.send_base = ack_no
-            if ack_no > self.send_base and (flags & FLAGS_ACK) == FLAGS_ACK:
-                print('aqui')
-                self.send_base = ack_no -1
                 if self.nao_confirmados:
-                    self._start_timer()
+                    if self.retransmitindo:
+                        self._retransmit()
                 else:
                     self._stop_timer()
 
+            self.retransmitindo = False
             self.ack_no += len(payload)
 
             if (flags & FLAGS_FIN) == FLAGS_FIN:
@@ -167,11 +163,11 @@ class Conexao:
             numero_de_segmentos = 1
         for i in range(numero_de_segmentos):
             msg = dados[i*MSS:(i+1)*MSS]
-            self._send_ack_segment(msg)
             if DEBUG:
                 _, _, dst_addr, _ = self.id_conexao
                 print(dst_addr, 'sending: seq->', self.seq_no, 'ack->', self.ack_no,
-                        'bytes->', len(msg), 'timer-> %.3f' % self.timeout_interval)
+                        'bytes->', len(msg), ('timer-> %.3f' % self.timeout_interval) if self.timer is None else ('timer -> anterior'))
+            self._send_ack_segment(msg)
 
     def _send_ack_segment(self,payload):
         src_addr, src_port, dst_addr, dst_port = self.id_conexao
@@ -188,7 +184,8 @@ class Conexao:
 
 
         if self.timer is None:
-            print('Timer started')
+            if DEBUG and not self.retransmitindo:
+                print('Timer started')
             self.initial_moment = time.time()
             self._start_timer()
 
