@@ -117,13 +117,6 @@ class Conexao:
             if DEBUG:
                 print(src_addr, 'receiving: seq->', seq_no, 'ack->', ack_no, 'bytes->', len(payload))
 
-            if not self.initial_moment is None:
-                self._stop_timer()
-                print('Timer stopped')
-                if not self.retransmitindo:
-                    self.final_moment = time.time()
-                    self.calc_rtt()
-
             if ack_no > self.send_base and (flags & FLAGS_ACK) == FLAGS_ACK:
                 self.nao_confirmados = self.nao_confirmados[ack_no-self.send_base:]
                 self.send_base = ack_no
@@ -131,7 +124,11 @@ class Conexao:
                     if self.retransmitindo:
                         self._retransmit()
                 else:
+                    print('Timer stopped')
                     self._stop_timer()
+                    if not self.retransmitindo:
+                        self.final_moment = time.time()
+                        self.calc_rtt()
 
             self.retransmitindo = False
             self.ack_no += len(payload)
