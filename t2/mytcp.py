@@ -120,10 +120,14 @@ class Conexao:
             if ack_no > self.send_base and (flags & FLAGS_ACK) == FLAGS_ACK:
                 self.nao_confirmados = self.nao_confirmados[ack_no-self.send_base:]
                 self.send_base = ack_no
+
                 if self.nao_confirmados:
+                    if DEBUG:
+                        print('++Timer restarted++')
                     self._start_timer()
                 else:
-                    print('Timer stopped')
+                    if DEBUG:
+                        print('++Timer stopped++')
                     self._stop_timer()
                     if not self.retransmitindo:
                         self.final_moment = time.time()
@@ -181,7 +185,7 @@ class Conexao:
 
         if self.timer is None:
             if DEBUG and not self.retransmitindo:
-                print('Timer started')
+                print('++Timer started++')
             self.initial_moment = time.time()
             self._start_timer()
 
