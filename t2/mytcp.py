@@ -68,6 +68,10 @@ class Conexao:
         self.dev_rtt = None
         self.retransmitindo = False
 
+        self.nao_enviados = b''
+        self.janela = 1
+        self.last_seq = None
+
         self._start_connection()
 
     def _start_connection(self):
@@ -99,6 +103,7 @@ class Conexao:
 
     def _retransmit(self):
         self.retransmitindo = True
+        self.janela = self.janela // 2
         comprimento = min(MSS, len(self.nao_confirmados))
         msg = self.nao_confirmados[:comprimento]
         if DEBUG:
@@ -106,7 +111,6 @@ class Conexao:
             print(dst_addr, 'retransmiting: seq->', self.send_base, 'ack->', self.ack_no,
                       'bytes->', len(msg), ('timer-> %.3f' % self.timeout_interval) if self.timer is None else ('timer -> anterior'))
             self._send_ack_segment(msg)
-
 
 
     def _rdt_rcv(self, seq_no, ack_no, flags, payload):
@@ -133,6 +137,11 @@ class Conexao:
                         self.final_moment = time.time()
                         self.calc_rtt()
 
+            if not self.last_seq is None and self.last_seq <= ack_no:
+                self.janela += 1
+                print('Updated window', self.janela, 'MSS')
+                self._send_pending()
+
             self.retransmitindo = False
             self.ack_no += len(payload)
 
@@ -158,16 +167,52 @@ class Conexao:
         """
         Usado pela camada de aplicação para enviar dados
         """
-        numero_de_segmentos = math.ceil(len(dados) / MSS)
+
+        self.nao_enviados += dados
+        prontos_para_envio = self.nao_enviados[:(self.janela * MSS)]
+        self.nao_enviados = self.nao_enviados[(self.janela * MSS):]
+
+        self.last_seq = self.seq_no + len(prontos_para_envio)
+        print( 'Last seq', self.last_seq)
+
+        numero_de_segmentos = math.ceil(len(prontos_para_envio) / MSS)
         if numero_de_segmentos == 0: # Caso seja uma mensagem em que o tamanho dos dados seja < MSS
             numero_de_segmentos = 1
         for i in range(numero_de_segmentos):
-            msg = dados[i*MSS:(i+1)*MSS]
+            msg = prontos_para_envio[i*MSS:(i+1)*MSS]
             if DEBUG:
+                if self.timer is None:
+                    print('++Timer started++')
                 _, _, dst_addr, _ = self.id_conexao
                 print(dst_addr, 'sending: seq->', self.seq_no, 'ack->', self.ack_no,
                         'bytes->', len(msg), ('timer-> %.3f' % self.timeout_interval) if self.timer is None else ('timer -> anterior'))
             self._send_ack_segment(msg)
+
+    def _send_pending(self):
+        print('Enviando pendentes')
+        tamanho_pendentes = (self.janela * MSS ) - len(self.nao_confirmados)
+
+        if tamanho_pendentes > 0:
+            prontos_para_envio = self.nao_enviados[:tamanho_pendentes]
+            if len(prontos_para_envio) == 0:
+                return
+            self.nao_enviados = self.nao_enviados[tamanho_pendentes:]
+            self.last_seq = self.seq_no + len(prontos_para_envio)
+            print('Last seq', self.last_seq)
+
+            numero_de_segmentos = math.ceil(len(prontos_para_envio) / MSS)
+            if numero_de_segmentos == 0:  # Caso seja uma mensagem em que o tamanho dos dados seja < MSS
+                numero_de_segmentos = 1
+            for i in range(numero_de_segmentos):
+                msg = prontos_para_envio[i*MSS:(i+1)*MSS]
+                if DEBUG:
+                    if self.timer is None:
+                        print('++Timer started++')
+                    _, _, dst_addr, _ = self.id_conexao
+                    print(dst_addr, 'sending: seq->', self.seq_no, 'ack->', self.ack_no,
+                        'bytes->', len(msg), ('timer-> %.3f' % self.timeout_interval) if self.timer is None else ('timer -> anterior'))
+                self._send_ack_segment(msg)
+
 
     def _send_ack_segment(self,payload):
         src_addr, src_port, dst_addr, dst_port = self.id_conexao
@@ -184,8 +229,6 @@ class Conexao:
 
 
         if self.timer is None:
-            if DEBUG and not self.retransmitindo:
-                print('++Timer started++')
             self.initial_moment = time.time()
             self._start_timer()
 
