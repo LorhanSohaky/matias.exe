@@ -137,7 +137,7 @@ class Conexao:
                         self.final_moment = time.time()
                         self.calc_rtt()
 
-            if not self.last_seq is None and self.last_seq <= ack_no:
+            if self.last_seq == ack_no:
                 self.janela += 1
                 print('Updated window', self.janela, 'MSS')
                 self._send_pending()
