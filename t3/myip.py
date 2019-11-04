@@ -1,4 +1,5 @@
 from myiputils import *
+from ipaddress import ip_network, ip_address
 
 
 class CamadaRede:
@@ -12,10 +13,11 @@ class CamadaRede:
         self.enlace = enlace
         self.enlace.registrar_recebedor(self.__raw_recv)
         self.meu_endereco = None
+        self.tabela = None
 
     def __raw_recv(self, datagrama):
         dscp, ecn, identification, flags, frag_offset, ttl, proto, \
-           src_addr, dst_addr, payload = read_ipv4_header(datagrama)
+            src_addr, dst_addr, payload = read_ipv4_header(datagrama)
         if dst_addr == self.meu_endereco:
             # atua como host
             if proto == IPPROTO_TCP and self.callback:
@@ -30,7 +32,14 @@ class CamadaRede:
         # TODO: Use a tabela de encaminhamento para determinar o próximo salto
         # (next_hop) a partir do endereço de destino do datagrama (dest_addr).
         # Retorne o next_hop para o dest_addr fornecido.
-        pass
+        dest_addr = ip_address(dest_addr)
+
+        for item in self.tabela:
+            network = item[0]
+            if dest_addr in network:
+                return str(item[1])
+
+        return None
 
     def definir_endereco_host(self, meu_endereco):
         """
@@ -48,9 +57,11 @@ class CamadaRede:
         Onde os CIDR são fornecidos no formato 'x.y.z.w/n', e os
         next_hop são fornecidos no formato 'x.y.z.w'.
         """
-        # TODO: Guarde a tabela de encaminhamento. Se julgar conveniente,
-        # converta-a em uma estrutura de dados mais eficiente.
-        pass
+
+        self.tabela = [(ip_network(item[0]), ip_address(item[1]))
+                       for item in tabela]
+        self.tabela.sort(key=lambda tup: tup[0].prefixlen)
+        self.tabela.reverse()
 
     def registrar_recebedor(self, callback):
         """
@@ -66,4 +77,4 @@ class CamadaRede:
         next_hop = self._next_hop(dest_addr)
         # TODO: Assumindo que a camada superior é o protocolo TCP, monte o
         # datagrama com o cabeçalho IP, contendo como payload o segmento.
-        self.enlace.enviar(datagrama, next_hop)
+        self.enlace.enviar(segmento, next_hop)
