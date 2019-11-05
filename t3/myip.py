@@ -1,5 +1,7 @@
 from myiputils import *
+from mytcputils import *
 from ipaddress import ip_network, ip_address
+from random import randint
 
 
 class CamadaRede:
@@ -75,6 +77,6 @@ class CamadaRede:
         (string no formato x.y.z.w).
         """
         next_hop = self._next_hop(dest_addr)
-        # TODO: Assumindo que a camada superior é o protocolo TCP, monte o
-        # datagrama com o cabeçalho IP, contendo como payload o segmento.
-        self.enlace.enviar(segmento, next_hop)
+        header = make_ipv4_header(
+            len(segmento), self.meu_endereco, dest_addr, verify_checksum=True)
+        self.enlace.enviar(header+segmento, next_hop)
