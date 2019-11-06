@@ -64,7 +64,7 @@ class CamadaRede:
         Onde os CIDR são fornecidos no formato 'x.y.z.w/n', e os
         next_hop são fornecidos no formato 'x.y.z.w'.
         """
-
+        # AQUI A MÁGICA!!!
         self.tabela = [(ip_network(item[0]), ip_address(item[1]))
                        for item in tabela]
         self.tabela.sort(key=lambda tup: tup[0].prefixlen)
