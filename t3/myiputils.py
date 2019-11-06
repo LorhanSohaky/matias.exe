@@ -23,7 +23,7 @@ def twos_comp(val, bits):
 def make_ipv4_header(size, src_addr, dest_addr, dscp=None, ecn=None, identification=None, flags=None, frag_offset=None, ttl=255, proto=None, verify_checksum=False):
     version = 4 << 4
     ihl = IHL
-    vihl = version | ihl
+    vihl = version + ihl
 
     if dscp is None:
         dscp = 0 << 6
@@ -36,11 +36,13 @@ def make_ipv4_header(size, src_addr, dest_addr, dscp=None, ecn=None, identificat
 
     if identification is None:
         identification = twos_comp(randint(0, 2**16), 16)
+
     if flags is None:
         flag_rsv = 0
         flag_dtf = 0
         flag_mrf = 0
         flags = (flag_rsv << 15) | (flag_dtf << 14) | (flag_mrf << 13)
+
     if frag_offset is None:
         frag_offset = 0
 
@@ -49,9 +51,9 @@ def make_ipv4_header(size, src_addr, dest_addr, dscp=None, ecn=None, identificat
     ttl = twos_comp(ttl, 8)
 
     if proto is None:
-        proto = 6
+        proto = IPPROTO_TCP
 
-    checksum = 0x0000
+    checksum = 0
     src_addr = str2addr(src_addr)
     dest_addr = str2addr(dest_addr)
     header = struct.pack('!bbhhhbbh', vihl, dscpecn, total_length,

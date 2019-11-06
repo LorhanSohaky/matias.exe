@@ -27,8 +27,13 @@ class CamadaRede:
         else:
             # atua como roteador
             next_hop = self._next_hop(dst_addr)
-            # TODO: Trate corretamente o campo TTL do datagrama
-            self.enlace.enviar(datagrama, next_hop)
+            ttl = ttl - 1
+
+            if ttl > 0:
+                header = make_ipv4_header(len(payload), src_addr, dst_addr, dscp, ecn,
+                                          identification, flags, frag_offset, ttl, proto, verify_checksum=True)
+                datagrama = header + payload
+                self.enlace.enviar(datagrama, next_hop)
 
     def _next_hop(self, dest_addr):
         # TODO: Use a tabela de encaminhamento para determinar o próximo salto
