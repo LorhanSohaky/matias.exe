@@ -57,14 +57,6 @@ class Enlace:
         self.linha_serial.enviar(data)
 
     def __raw_recv(self, dados):
-        # TODO: Preencha aqui com o código para receber dados da linha serial.
-        # Trate corretamente as sequências de escape. Quando ler um quadro
-        # completo, repasse o datagrama contido nesse quadro para a camada
-        # superior chamando self.callback. Cuidado pois o argumento dados pode
-        # vir quebrado de várias formas diferentes - por exemplo, podem vir
-        # apenas pedaços de um quadro, ou um pedaço de quadro seguido de um
-        # pedaço de outro, ou vários quadros de uma vez só.
-
         dados_tmp = self.dados + dados
 
         regex = b"(\\xc0)?([^\\xc0]+)(\\xc0)"
@@ -75,10 +67,15 @@ class Enlace:
             return
 
         matches = re.finditer(regex, dados_tmp, re.MULTILINE)
+
+        position = 0
         for _, match in enumerate(matches, start=1):
+            position += len(match.group(0))
+            datagrama = match.group(2)
+            datagrama = datagrama.replace(b'\xdb\xdc', b'\xc0')
+            datagrama = datagrama.replace(b'\xdb\xdd', b'\xdb')
             if match.group(1) and match.group(3):
-                self.callback(match.group(2))
-                self.dados = b''
+                self.callback(datagrama)
             elif match.group(3):
-                self.callback(match.group(2))
-                self.dados = b''
+                self.callback(datagrama)
+        self.dados = dados_tmp[position:]
