@@ -45,6 +45,9 @@ class Enlace:
         self.callback = callback
 
     def enviar(self, datagrama):
+        datagrama = datagrama.replace(b'\xdb', b'\xdb\xdd')
+        datagrama = datagrama.replace(b'\xc0', b'\xdb\xdc')
+
         delimiter = b'\xc0'
         data = delimiter + datagrama + delimiter
         self.linha_serial.enviar(data)
