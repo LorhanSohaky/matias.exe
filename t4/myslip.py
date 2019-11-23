@@ -1,3 +1,6 @@
+import re
+
+
 class CamadaEnlace:
     def __init__(self, linhas_seriais):
         """
@@ -40,6 +43,7 @@ class Enlace:
     def __init__(self, linha_serial):
         self.linha_serial = linha_serial
         self.linha_serial.registrar_recebedor(self.__raw_recv)
+        self.dados = b''
 
     def registrar_recebedor(self, callback):
         self.callback = callback
@@ -60,4 +64,21 @@ class Enlace:
         # vir quebrado de várias formas diferentes - por exemplo, podem vir
         # apenas pedaços de um quadro, ou um pedaço de quadro seguido de um
         # pedaço de outro, ou vários quadros de uma vez só.
-        pass
+
+        dados_tmp = self.dados + dados
+
+        regex = b"(\\xc0)?([^\\xc0]+)(\\xc0)"
+
+        matches = re.match(regex, dados_tmp, re.MULTILINE)
+        if matches is None:
+            self.dados += dados
+            return
+
+        matches = re.finditer(regex, dados_tmp, re.MULTILINE)
+        for matchNum, match in enumerate(matches, start=1):
+            if match.group(1) and match.group(3):
+                self.callback(match.group(2))
+                self.dados = b''
+            elif match.group(3):
+                self.callback(match.group(2))
+                self.dados = b''
