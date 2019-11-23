@@ -3,6 +3,21 @@ from mytcputils import *
 from ipaddress import ip_network, ip_address
 from random import randint
 
+def make_icmp(datagrama):
+    unused = 0
+    checksum = 0
+    tipo = 11
+    codigo = 0
+    payload = datagrama[:28]
+    comprimento = 8 + len(payload)
+    
+    icmp = struct.pack('!bbhi', tipo, codigo, checksum, comprimento) + payload
+
+    checksum = twos_comp(calc_checksum(icmp), 16)
+    icmp = struct.pack('!bbhi', tipo, codigo, checksum, comprimento) + payload
+
+    return icmp
+
 
 class CamadaRede:
     def __init__(self, enlace):
@@ -26,14 +41,20 @@ class CamadaRede:
                 self.callback(src_addr, dst_addr, payload)
         else:
             # atua como roteador
-            next_hop = self._next_hop(dst_addr)
             ttl = ttl - 1
+            next_hop = self._next_hop(dst_addr)
 
             if ttl > 0:
                 header = make_ipv4_header(len(payload), src_addr, dst_addr, dscp, ecn,
                                           identification, flags, frag_offset, ttl, proto, verify_checksum=True)
                 datagrama = header + payload
                 self.enlace.enviar(datagrama, next_hop)
+            else:
+                next_hop = self._next_hop(src_addr)
+                icmp = make_icmp(datagrama)
+                new_header = make_ipv4_header(len(icmp), self.meu_endereco, src_addr, dscp, ecn,
+                                          identification, flags, frag_offset, randint(100,255), IPPROTO_ICMP, verify_checksum=True)
+                self.enlace.enviar(new_header+icmp, next_hop)
 
     def _next_hop(self, dest_addr):
         # TODO: Use a tabela de encaminhamento para determinar o próximo salto
