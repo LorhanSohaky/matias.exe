@@ -45,10 +45,9 @@ class Enlace:
         self.callback = callback
 
     def enviar(self, datagrama):
-        # TODO: Preencha aqui com o código para enviar o datagrama pela linha
-        # serial, fazendo corretamente a delimitação de quadros e o escape de
-        # sequências especiais, de acordo com o protocolo SLIP (RFC 1055).
-        pass
+        delimiter = b'\xc0'
+        data = delimiter + datagrama + delimiter
+        self.linha_serial.enviar(data)
 
     def __raw_recv(self, dados):
         # TODO: Preencha aqui com o código para receber dados da linha serial.
