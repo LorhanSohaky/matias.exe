@@ -75,7 +75,7 @@ class Enlace:
             return
 
         matches = re.finditer(regex, dados_tmp, re.MULTILINE)
-        for matchNum, match in enumerate(matches, start=1):
+        for _, match in enumerate(matches, start=1):
             if match.group(1) and match.group(3):
                 self.callback(match.group(2))
                 self.dados = b''
