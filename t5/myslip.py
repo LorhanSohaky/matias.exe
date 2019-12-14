@@ -75,7 +75,15 @@ class Enlace:
             datagrama = datagrama.replace(b'\xdb\xdc', b'\xc0')
             datagrama = datagrama.replace(b'\xdb\xdd', b'\xdb')
             if match.group(1) and match.group(3):
-                self.callback(datagrama)
+                try:
+                    self.callback(datagrama)
+                except:
+                    import traceback
+                    traceback.print_exc()
             elif match.group(3):
-                self.callback(datagrama)
+                try:
+                    self.callback(datagrama)
+                except:
+                    import traceback
+                    traceback.print_exc()
         self.dados = dados_tmp[position:]

@@ -1,10 +1,11 @@
 import asyncio
-from mytcputils import FLAGS_FIN, FLAGS_SYN, FLAGS_ACK, MSS, make_header, read_header, fix_checksum
+from mytcputils import FLAGS_FIN, FLAGS_SYN, FLAGS_ACK, MSS, make_header, read_header, fix_checksum, str2addr, calc_checksum
 import random
 import math
 import time
+import struct
 
-DEBUG = True
+DEBUG = False
 
 
 class Servidor:
@@ -28,6 +29,12 @@ class Servidor:
 
         if dst_port != self.porta:
             # Ignora segmentos que não são destinados à porta do nosso servidor
+            return
+
+        pseudohdr = str2addrsrc_addr)( + str2addr(dst_addr) + \
+            struct.pack('!HH', 0x0006, len(segment))
+        if calc_checksum(pseudohdr + segment) != 0:
+            print('descartando segmento com checksum incorreto')
             return
 
         payload = segment[4*(flags>>12):]
