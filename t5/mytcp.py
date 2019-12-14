@@ -31,7 +31,7 @@ class Servidor:
             # Ignora segmentos que não são destinados à porta do nosso servidor
             return
 
-        pseudohdr = str2addrsrc_addr)( + str2addr(dst_addr) + \
+        pseudohdr = str2addr(src_addr) + str2addr(dst_addr) + \
             struct.pack('!HH', 0x0006, len(segment))
         if calc_checksum(pseudohdr + segment) != 0:
             print('descartando segmento com checksum incorreto')
