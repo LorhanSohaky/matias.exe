@@ -267,3 +267,7 @@ class Conexao:
         self.timeout_interval = self.estimated_rtt + 4 * self.dev_rtt
         if DEBUG:
             print('New timeout %.3f' % self.timeout_interval)
+    
+    def __str__(self):
+        src_addr, src_port, _, _ = self.id_conexao
+        return f'{src_addr}:{src_port}'

@@ -1,1 +1,1 @@
-../mytcp.py
+../../t2/mytcp.py
