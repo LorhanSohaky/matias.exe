@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+# Antes de usar, execute o seguinte comando para evitar que o Linux feche
+# as conexões TCP que o seu programa estiver tratando:
+#
+# sudo iptables -I OUTPUT -p tcp --tcp-flags RST RST -j DROP
+
+
+# Este é um exemplo de um programa que faz eco, ou seja, envia de volta para
+# o cliente tudo que for recebido em uma conexão.
+
+import asyncio
+from camadarede import CamadaRedeLinux
+from mytcp import Servidor as Tcp
+
+DEBUG = True
+
+class Server:
+    def __init__(self):
+        if DEBUG:
+            print('Iniciando servidor!')
+        self.conexoes = []
+
+    def dados_recebidos(self,conexao, dados):
+        if DEBUG:
+            print(conexao, 'recebido',dados)
+        if dados == b'':
+            conexao.fechar()
+        else:
+            conexao.enviar(dados)   # envia de volta
+
+    def conexao_aceita(self,conexao):
+        conexao.registrar_recebedor(self.dados_recebidos)   # usa esse mesmo recebedor para toda conexão aceita
+
+server = Server()
+rede = CamadaRedeLinux()
+tcp = Tcp(rede, 7000)
+tcp.registrar_monitor_de_conexoes_aceitas(server.conexao_aceita)
+asyncio.get_event_loop().run_forever()
