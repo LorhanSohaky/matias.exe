@@ -16,9 +16,10 @@ DEBUG = True
 
 class Server:
     def __init__(self):
+        self.clientes = {}
+
         if DEBUG:
             print('Iniciando servidor!')
-        self.conexoes = []
 
     def dados_recebidos(self,conexao, dados):
         if DEBUG:
@@ -26,9 +27,14 @@ class Server:
         if dados == b'':
             conexao.fechar()
         else:
-            conexao.enviar(dados)   # envia de volta
+
+            entrada = self.clientes[conexao].get('entrada', b'')
+            self.clientes[conexao]['entrada'] = entrada + dados
+            self.clientes[conexao]['saida'] = self.clientes[conexao]['entrada'] + b'ops'
+            conexao.enviar(self.clientes[conexao]['saida'])
 
     def conexao_aceita(self,conexao):
+        self.clientes[conexao] = {'entrada': b'', 'saida': b''}
         conexao.registrar_recebedor(self.dados_recebidos)   # usa esse mesmo recebedor para toda conexão aceita
 
 server = Server()
