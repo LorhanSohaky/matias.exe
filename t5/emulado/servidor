@@ -25,9 +25,14 @@ class Server:
         if DEBUG:
             print(conexao, 'recebido',dados)
         if dados == b'':
+            if DEBUG:
+                src_addr, src_port, _, _ = conexao.id_conexao
+                print('Fechando conexão com', f'{src_addr}:{src_port}')
+
+            del self.clientes[conexao]
             conexao.fechar()
         else:
-
+            
             entrada = self.clientes[conexao].get('entrada', b'')
             self.clientes[conexao]['entrada'] = entrada + dados
             self.clientes[conexao]['saida'] = self.clientes[conexao]['entrada'] + b'ops'
