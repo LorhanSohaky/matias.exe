@@ -29,18 +29,34 @@ class Server:
                 src_addr, src_port, _, _ = conexao.id_conexao
                 print('Fechando conexão com', f'{src_addr}:{src_port}')
 
+            username = self.clientes[conexao].get('username')
+
             del self.clientes[conexao]
             conexao.fechar()
-        else:
-            
-            entrada = self.clientes[conexao].get('entrada', b'')
-            self.clientes[conexao]['entrada'] = entrada + dados
-            self.clientes[conexao]['saida'] = self.clientes[conexao]['entrada'] + b'ops'
-            conexao.enviar(self.clientes[conexao]['saida'])
 
-    def conexao_aceita(self,conexao):
-        self.clientes[conexao] = {'entrada': b'', 'saida': b''}
+            if username:
+                msg = f'/quit {username}'
+                self.broadcast(msg)
+
+        else:
+            dados_decodificados = dados.decode()
+            saida_codificada = self.clientes[conexao]['saida'].encode()
+
+            entrada_anterior = self.clientes[conexao].get('entrada', '')
+            self.clientes[conexao]['entrada'] = entrada_anterior + dados_decodificados
+
+            conexao.enviar(saida_codificada)
+
+    def conexao_aceita(self, conexao):
+        self.clientes[conexao] = {'entrada': '', 'saida': '', 'username': ''}
         conexao.registrar_recebedor(self.dados_recebidos)   # usa esse mesmo recebedor para toda conexão aceita
+
+    def broadcast(self, msg):
+        msg_encoded = msg.encode()
+        
+        for conexao in self.clientes:
+            conexao.enviar(msg_encoded)
+
 
 server = Server()
 rede = CamadaRedeLinux()
