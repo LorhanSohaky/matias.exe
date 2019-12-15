@@ -81,9 +81,8 @@ class Conexao:
         self.servidor.rede.enviar(cabecalho,src_addr)
         self.seq_no += 1
         self.send_base = self.seq_no
-        if DEBUG:
-            print(src_addr, 'connected with', dst_addr)
-            print('handshaking: seq->',self.seq_no,'ack->',self.ack_no)
+        print(f'{src_addr}:{src_port}', 'connected with', f'{dst_addr}:{dst_port}')
+        print('handshaking: seq->',self.seq_no,'ack->',self.ack_no)
 
     def _start_timer(self):
         self._stop_timer()
@@ -110,7 +109,7 @@ class Conexao:
             _, _, dst_addr, _ = self.id_conexao
             print(dst_addr, 'retransmiting: seq->', self.send_base, 'ack->', self.ack_no,
                       'bytes->', len(msg), ('timer-> %.3f' % self.timeout_interval) if self.timer is None else ('timer -> anterior'))
-            self._send_ack_segment(msg)
+        self._send_ack_segment(msg)
 
 
     def _rdt_rcv(self, seq_no, ack_no, flags, payload):
@@ -119,7 +118,7 @@ class Conexao:
         
         if self.ack_no == seq_no:
             if DEBUG:
-                print(src_addr, 'receiving: seq->', seq_no, 'ack->', ack_no, 'bytes->', len(payload))
+                print(f'{src_addr}:{src_port}', 'receiving: seq->', seq_no, 'ack->', ack_no, 'bytes->', len(payload))
 
             if ack_no > self.send_base and (flags & FLAGS_ACK) == FLAGS_ACK:
                 self.nao_confirmados = self.nao_confirmados[ack_no-self.send_base:]
@@ -139,7 +138,8 @@ class Conexao:
 
             if self.last_seq == ack_no:
                 self.janela += 1
-                print('Updated window', self.janela, 'MSS')
+                if DEBUG:
+                    print('Updated window', self.janela, 'MSS')
                 self._send_pending()
 
             self.retransmitindo = False
@@ -154,7 +154,7 @@ class Conexao:
                 dados = fix_checksum(dados, src_addr,dst_addr)
                 self.servidor.rede.enviar(dados,src_addr)
 
-            self.callback(self, payload)
+                self.callback(self, payload)
 
     def registrar_recebedor(self, callback):
         """
@@ -173,23 +173,25 @@ class Conexao:
         self.nao_enviados = self.nao_enviados[(self.janela * MSS):]
 
         self.last_seq = self.seq_no + len(prontos_para_envio)
-        print( 'Last seq', self.last_seq)
+        if DEBUG:
+            print( 'Last seq', self.last_seq)
 
         numero_de_segmentos = math.ceil(len(prontos_para_envio) / MSS)
         if numero_de_segmentos == 0: # Caso seja uma mensagem em que o tamanho dos dados seja < MSS
             numero_de_segmentos = 1
         for i in range(numero_de_segmentos):
             msg = prontos_para_envio[i*MSS:(i+1)*MSS]
-            if DEBUG:
-                if self.timer is None:
+            if self.timer is None:
+                if DEBUG:
                     print('++Timer started++')
-                _, _, dst_addr, _ = self.id_conexao
-                print(dst_addr, 'sending: seq->', self.seq_no, 'ack->', self.ack_no,
+                    _, _, dst_addr, _ = self.id_conexao
+                    print(dst_addr, 'sending: seq->', self.seq_no, 'ack->', self.ack_no,
                         'bytes->', len(msg), ('timer-> %.3f' % self.timeout_interval) if self.timer is None else ('timer -> anterior'))
             self._send_ack_segment(msg)
 
     def _send_pending(self):
-        print('Enviando pendentes')
+        if DEBUG:
+            print('Enviando pendentes')
         tamanho_pendentes = (self.janela * MSS ) - len(self.nao_confirmados)
 
         if tamanho_pendentes > 0:
@@ -198,19 +200,20 @@ class Conexao:
                 return
             self.nao_enviados = self.nao_enviados[tamanho_pendentes:]
             self.last_seq = self.seq_no + len(prontos_para_envio)
-            print('Last seq', self.last_seq)
+            if DEBUG:
+                print('Last seq', self.last_seq)
 
             numero_de_segmentos = math.ceil(len(prontos_para_envio) / MSS)
             if numero_de_segmentos == 0:  # Caso seja uma mensagem em que o tamanho dos dados seja < MSS
                 numero_de_segmentos = 1
             for i in range(numero_de_segmentos):
                 msg = prontos_para_envio[i*MSS:(i+1)*MSS]
-                if DEBUG:
-                    if self.timer is None:
+                if self.timer is None:
+                    if DEBUG:
                         print('++Timer started++')
-                    _, _, dst_addr, _ = self.id_conexao
-                    print(dst_addr, 'sending: seq->', self.seq_no, 'ack->', self.ack_no,
-                        'bytes->', len(msg), ('timer-> %.3f' % self.timeout_interval) if self.timer is None else ('timer -> anterior'))
+                        _, _, dst_addr, _ = self.id_conexao
+                        print(dst_addr, 'sending: seq->', self.seq_no, 'ack->', self.ack_no,
+                            'bytes->', len(msg), ('timer-> %.3f' % self.timeout_interval) if self.timer is None else ('timer -> anterior'))
                 self._send_ack_segment(msg)
 
 
