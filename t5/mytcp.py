@@ -161,7 +161,7 @@ class Conexao:
                 dados = fix_checksum(dados, src_addr,dst_addr)
                 self.servidor.rede.enviar(dados,src_addr)
 
-            self.callback(self, payload)
+                self.callback(self, payload)
 
     def registrar_recebedor(self, callback):
         """
