@@ -18,6 +18,9 @@ import json
 
 DEBUG = True
 
+MAX_FRUITS = 5
+DELAY_ADD_FRUITS = 3
+
 
 def move_left(current_position, next_position):
     next_x, _ = next_position
@@ -55,6 +58,11 @@ class Server:
     def __init__(self):
         self.players = []
         self.fruits = []
+
+        self.loop = asyncio.get_event_loop()
+        self.interval = DELAY_ADD_FRUITS
+        self.timer = None
+        self.add_fruits()
 
         if DEBUG:
             print('Iniciando servidor!')
@@ -157,9 +165,14 @@ class Server:
             player['score'] += 1
             self.fruits.remove(position)
 
+    def add_fruits(self):
+        self.timer = self.loop.call_later(
+            self.interval, self.add_fruits)
+        if len(self.fruits) < MAX_FRUITS:
             x = random.randrange(rows)
             y = random.randrange(rows)
             self.fruits.append((x, y))
+            self.broadcast()
 
     def parser(self, conexao, dados):
         player = self.get_player(conexao)
