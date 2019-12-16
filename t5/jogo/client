@@ -18,6 +18,7 @@ class Game:
     def __init__(self):
         self.window = pygame.display.set_mode(window_size)
         self.players = []
+        self.fruits = []
         self.me = None
 
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -52,6 +53,7 @@ class Game:
         data = json.loads(data)
         self.me = data['me']
         self.players = data['players']
+        self.fruits = data['fruits']
 
     def close(self):
         self.socket.close()
@@ -72,6 +74,9 @@ class Game:
             self.window.fill((0, 0, 0))
             for player in self.players:
                 self.draw_cube(player['position'], (255, 0, 0))
+
+            for fruit in self.fruits:
+                self.draw_cube(fruit, (0, 255, 0))
 
             if self.me:
                 self.draw_cube(self.me['position'], (255, 0, 255))
