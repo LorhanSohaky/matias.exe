@@ -1,0 +1,130 @@
+#!/usr/bin/python3
+
+import asyncio
+import socket
+import pygame
+import json
+import time
+
+from vars import window_size, width, rows
+
+HOST = 'localhost'
+PORT = 7000
+MAX_BYTES = 3072
+FPS = 15
+
+
+class Game:
+    def __init__(self):
+        self.window = pygame.display.set_mode(window_size)
+        self.players = []
+        self.me = None
+
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.loop = asyncio.get_event_loop()
+
+        self.connect()
+
+        self.event_queue = asyncio.Queue()
+        self.pygame_task = self.loop.run_in_executor(
+            None, self.pygame_event_loop)
+        self.event_task = asyncio.ensure_future(self.handle_events())
+        self.animation_task = asyncio.ensure_future(self.render())
+        try:
+            self.loop.run_forever()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            self.pygame_task.cancel()
+            self.animation_task.cancel()
+            self.event_task.cancel()
+
+        self.close()
+
+    def connect(self):
+        self.socket.connect((HOST, PORT))
+        self.socket.setblocking(False)
+
+        self.loop.add_reader(self.socket, self.receive)
+
+    def receive(self):
+        data = self.socket.recv(MAX_BYTES)
+        data = json.loads(data)
+        self.me = data['me']
+        self.players = data['players']
+
+    def close(self):
+        self.socket.close()
+        pygame.quit()
+
+    def pygame_event_loop(self):
+        while True:
+            event = pygame.event.wait()
+            asyncio.run_coroutine_threadsafe(
+                self.event_queue.put(event), loop=self.loop)
+
+    async def render(self):
+        current_time = 0
+        while True:
+            last_time, current_time = current_time, time.time()
+            await asyncio.sleep(1 / FPS - (current_time - last_time))  # tick
+
+            self.window.fill((0, 0, 0))
+            for player in self.players:
+                self.draw_cube(player['position'], (255, 0, 0))
+
+            if self.me:
+                self.draw_cube(self.me['position'], (255, 0, 255))
+
+            pygame.display.update()
+
+    async def handle_events(self):
+        while True:
+            event = await self.event_queue.get()
+            if event.type == pygame.QUIT:
+                break
+
+            if event.type == pygame.KEYDOWN:
+                key = event.key
+
+                action = None
+                if key == pygame.K_LEFT:
+                    x, y = self.me['position']
+                    self.me['position'] = (x-1, y)
+                    action = 'move_left'
+
+                elif key == pygame.K_RIGHT:
+                    x, y = self.me['position']
+                    self.me['position'] = (x+1, y)
+                    action = 'move_right'
+
+                elif key == pygame.K_UP:
+                    x, y = self.me['position']
+                    self.me['position'] = (x, y-1)
+                    action = 'move_up'
+
+                elif key == pygame.K_DOWN:
+                    x, y = self.me['position']
+                    self.me['position'] = (x, y+1)
+                    action = 'move_down'
+
+                if action:
+                    command = {'action': action,
+                               'position': self.me['position']}
+                    self.send_command(command)
+
+        asyncio.get_event_loop().stop()
+
+    def send_command(self, command):
+        msg = json.dumps(command)
+        self.socket.sendall(msg.encode())
+
+    def draw_cube(self, player, color):
+        dis = width // rows
+        i, j = player
+
+        pygame.draw.rect(self.window, color, (i*dis+1, j*dis+1, dis-2, dis-2))
+
+
+if __name__ == "__main__":
+    game = Game()
