@@ -13,7 +13,7 @@ import traceback
 import random
 from camadarede import CamadaRedeLinux
 from mytcp import Servidor as Tcp
-from vars import width, height, rows
+from vars import rows
 import json
 
 DEBUG = True
@@ -21,7 +21,7 @@ DEBUG = True
 
 def move_left(current_position, next_position):
     next_x, _ = next_position
-    current_x, current_y = current_position['position']
+    current_x, current_y = current_position
 
     return (next_x, current_y) if current_x - 1 == next_x and next_x >= 0 \
         else (current_x, current_y)
@@ -31,7 +31,7 @@ def move_right(current_position, next_position):
     next_x, _ = next_position
     current_x, current_y = current_position
 
-    return (next_x, current_y) if current_x + 1 == next_x and next_x < width \
+    return (next_x, current_y) if current_x + 1 == next_x and next_x < rows \
         else (current_x, current_y)
 
 
@@ -39,7 +39,7 @@ def move_up(current_position, next_position):
     _, next_y = next_position
     current_x, current_y = current_position
 
-    return (current_x, next_y) if current_y + 1 == next_y and next_y < height \
+    return (current_x, next_y) if current_y - 1 == next_y and next_y >= 0 \
         else (current_x, current_y)
 
 
@@ -47,7 +47,7 @@ def move_down(current_position, next_position):
     _, next_y = next_position
     current_x, current_y = current_position
 
-    return (current_x, next_y) if current_y - 1 == next_y and next_y >= 0 \
+    return (current_x, next_y) if current_y + 1 == next_y and next_y < rows \
         else (current_x, current_y)
 
 
@@ -66,22 +66,43 @@ class Server:
             if DEBUG:
                 src_addr, src_port, _, _ = conexao.id_conexao
                 print('Fechando conexão com', f'{src_addr}:{src_port}')
-
-            del self.players[conexao]
+            player = self.get_player(conexao)
+            self.players.remove(player)
             conexao.fechar()
 
         else:
             dados_decodificados = dados.decode()
             dados_decodificados = json.loads(dados_decodificados)
-            print(dados_decodificados)
 
             self.parser(conexao, dados_decodificados)
 
             self.broadcast()
 
     def conexao_aceita(self, conexao):
-        self.players.append({'id': conexao, 'position': (0, 0), 'score': 0})
+        initial_state = {'id': conexao, 'position': (0, 0), 'score': 0}
+
+        self.players.append(initial_state)
         conexao.registrar_recebedor(self.dados_recebidos)
+
+        other_players = list(
+            filter(lambda item: item['id'] != conexao,
+                   self.players.copy()))
+
+        other_players = list(
+            map(lambda item: {'position': item['position'],
+                              'score': item['score']}, other_players))
+        state = {
+            'players': other_players,
+            'fruits': self.fruits,
+            'me': {
+                'position': initial_state['position'],
+                'score': initial_state['score']
+            }
+        }
+
+        msg = json.dumps(state)
+
+        conexao.enviar(msg.encode())
 
     def private_message(self, msg, conexao):
         msg_encoded = msg.encode()
@@ -99,29 +120,22 @@ class Server:
                 map(lambda item: {'position': item['position'],
                                   'score': item['score']}, other_players))
             me = self.get_player(player['id'])
-            print('me', me)
             state = {
                 'players': other_players,
                 'fruits': self.fruits,
-                'me': me['position']
+                'me': {'position': me['position'], 'score': me['score']}
             }
-
-            print('before', state)
 
             msg = json.dumps(state).encode()
             conexao.enviar(msg)
 
     def get_player(self, conexao):
-        print('conexao', conexao)
-        print('players', self.players)
         return list(filter(lambda item:
                            item['id'] == conexao, self.players))[0]
 
     def move(self, player, dados):
         current_position = player['position']
         next_position = dados['position']
-
-        print('Veio:', dados['action'])
 
         actions = {
             'move_left': move_left,
