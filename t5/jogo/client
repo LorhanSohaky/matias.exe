@@ -57,6 +57,13 @@ class Game:
 
     def close(self):
         self.socket.close()
+        print(f'SUA PONTUAÇÃO: {self.me["score"]}')
+        players = [item['score'] for item in self.players]
+        players.sort(reverse=True)
+        print('DEMAIS JOGADORES:')
+        for player in players:
+            print(player)
+
         pygame.quit()
 
     def pygame_event_loop(self):
