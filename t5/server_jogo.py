@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Este é um exemplo de um programa que faz eco, ou seja, envia de volta para
 # o cliente tudo que for recebido em uma conexão.
-
+import re
 import json
 import traceback
 import random
@@ -77,11 +77,11 @@ class Server:
 
         else:
             dados_decodificados = dados.decode()
-            dados_decodificados = json.loads(dados_decodificados)
-
-            self.parser(conexao, dados_decodificados)
-
-            self.broadcast()
+            matches = re.finditer(r'\{.+?\}', dados_decodificados, re.MULTILINE)
+            for matchNum, match in enumerate(matches, start=1):
+                dados_decodificados = json.loads(match.group())
+                self.parser(conexao, dados_decodificados)
+                self.broadcast()
 
     def conexao_aceita(self, conexao):
         initial_state = {'id': conexao, 'position': (0, 0), 'score': 0}
@@ -105,7 +105,7 @@ class Server:
             }
         }
 
-        msg = json.dumps(state)
+        msg = json.dumps(state) + '\n'
 
         conexao.enviar(msg.encode())
 
@@ -131,7 +131,8 @@ class Server:
                 'me': {'position': me['position'], 'score': me['score']}
             }
 
-            msg = json.dumps(state).encode()
+            msg = json.dumps(state).encode() + b'\n'
+
             conexao.enviar(msg)
 
     def get_player(self, conexao):

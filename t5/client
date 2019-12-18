@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import re
 import asyncio
 import socket
 import pygame
@@ -11,7 +12,7 @@ from jogo.vars import window_size, width, rows
 HOST = '192.168.123.2'
 PORT = 7000
 MAX_BYTES = 3072
-FPS = 15
+FPS = 60
 
 
 class Game:
@@ -31,6 +32,8 @@ class Game:
             None, self.pygame_event_loop)
         self.event_task = asyncio.ensure_future(self.handle_events())
         self.animation_task = asyncio.ensure_future(self.render())
+
+        self.recebidos = ''
         try:
             self.loop.run_forever()
         except KeyboardInterrupt:
@@ -49,11 +52,18 @@ class Game:
         self.loop.add_reader(self.socket, self.receive)
 
     def receive(self):
-        data = self.socket.recv(MAX_BYTES)
-        data = json.loads(data)
-        self.me = data['me']
-        self.players = data['players']
-        self.fruits = data['fruits']
+        data = self.socket.recv(MAX_BYTES).decode()
+        data = self.recebidos + data
+        self.recebidos = ''
+
+        for d in data.splitlines():
+            try:
+                d = json.loads(d)
+                self.me = d['me']
+                self.players = d['players']
+                self.fruits = d['fruits']
+            except:
+                self.recebidos += d
 
     def close(self):
         self.socket.close()
