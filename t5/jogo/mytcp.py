@@ -62,6 +62,7 @@ class Cliente:
         self.rede = rede
         self.porta = porta
         self.conexao = None
+        self.id_conexao = None
         self.callback = None
         self.rede.registrar_recebedor(self._rdt_rcv)
         self.status_conexao = 0
@@ -75,18 +76,13 @@ class Cliente:
         ack_no = random.randint(50, 0xfff)
         seq_no = random.randint(50, 0xfff)
         cabecalho = make_header(
-            dst_port, src_port, seq_no, ack_no, FLAGS_SYN)
-        cabecalho = fix_checksum(cabecalho, src_addr, dst_addr)
-        self.rede.enviar(cabecalho, src_addr)
+            src_port, dst_port, seq_no, ack_no, FLAGS_SYN)
+        cabecalho = fix_checksum(cabecalho, dst_addr, src_addr)
+        self.rede.enviar(cabecalho, dst_addr)
 
         print(f'{src_addr}:{src_port}', 'connected with', f'{dst_addr}:{dst_port}')
         print('handshaking: seq->', seq_no, 'ack->', ack_no)
-        self.conexao = Conexao(
-            self, (src_addr, src_port, dst_addr, dst_port), seq_no + 1, ack_no)
         self.status_conexao = 1
-
-        if self.callback:
-            self.callback(self.conexao)
 
     def registrar_monitor_de_conexoes_aceitas(self, callback):
         """
@@ -104,31 +100,32 @@ class Cliente:
             return
 
         payload = segment[4*(flags >> 12):]
-        id_conexao = (src_addr, src_port, dst_addr, dst_port)
+        id_conexao = (dst_addr, dst_port, src_addr, src_port)
 
         if (flags & (FLAGS_SYN | FLAGS_ACK)) == (FLAGS_SYN | FLAGS_ACK) and self.status_conexao == 1:
             tmp = ack_no
             ack_no = seq_no + 1
             seq_no = tmp
 
+            self.id_conexao = id_conexao
+
             cabecalho = make_header(
                 dst_port, src_port, seq_no, ack_no, FLAGS_ACK)
             cabecalho = fix_checksum(cabecalho, src_addr, dst_addr)
             self.rede.enviar(cabecalho, src_addr)
 
-            print('finalizando handshake')
-
             self.conexao = Conexao(
-                self, id_conexao, seq_no, ack_no)
+                self, (dst_addr, dst_port, src_addr, src_port), seq_no, ack_no)
+
             self.status_conexao = 2
 
             if self.callback:
                 self.callback(self.conexao)
-        elif id_conexao == self.conexao and self.status_conexao == 2:
+        elif id_conexao == self.id_conexao and self.status_conexao == 2:
             self.conexao._rdt_rcv(seq_no, ack_no, flags, payload)
 
             if (flags & FLAGS_FIN) == FLAGS_FIN:
-                self.conexao = None
+                self.conexao.fechar()
 
         elif self.status_conexao != 2:
             print('%s:%d -> %s:%d (conexão não estabelecida)' %
@@ -192,9 +189,7 @@ class Conexao:
 
 
     def _rdt_rcv(self, seq_no, ack_no, flags, payload):
-        
         src_addr, src_port, dst_addr, dst_port = self.id_conexao
-        
         if self.ack_no == seq_no:
             if DEBUG:
                 print(f'{src_addr}:{src_port}', 'receiving: seq->', seq_no, 'ack->', ack_no, 'bytes->', len(payload))
