@@ -22,6 +22,22 @@ class Servidor:
         """
         self.callback = callback
 
+    def _start_connection(self, id_conexao, segment):
+        src_port, dst_port, seq_no, ack_no, \
+            flags, _, _, _ = read_header(segment)
+        src_addr, src_port, dst_addr, dst_port = id_conexao
+
+        ack_no = seq_no + 1
+        seq_no = random.randint(40, 0xfff)
+        cabecalho = make_header(
+            dst_port, src_port, seq_no, ack_no, FLAGS_SYN | FLAGS_ACK)
+        cabecalho = fix_checksum(cabecalho, src_addr, dst_addr)
+        self.rede.enviar(cabecalho, src_addr)
+        print(f'{src_addr}:{src_port}',
+              'connected with', f'{dst_addr}:{dst_port}')
+        print('handshaking: seq->', seq_no, 'ack->', ack_no)
+        return Conexao(self, id_conexao, seq_no + 1, ack_no)
+
     def _close_connection(self, src_addr, dst_addr, segment):
         src_port, dst_port, seq_no, ack_no, \
             flags, _, _, _ = read_header(segment)
@@ -37,8 +53,7 @@ class Servidor:
 
             self.rede.enviar(cabecalho, src_addr)
         elif (flags & FLAGS_ACK) == FLAGS_ACK and self.conexoes[id_conexao].closing:
-            if DEBUG:
-                print(f'Fechada a conexão com {src_addr}:{src_port}')
+            print(f'Fechada a conexão com {src_addr}:{src_port}')
             self.conexoes.pop(id_conexao)
 
     def _rdt_rcv(self, src_addr, dst_addr, segment):
@@ -53,7 +68,8 @@ class Servidor:
         id_conexao = (src_addr, src_port, dst_addr, dst_port)
 
         if (flags & FLAGS_SYN) == FLAGS_SYN:
-            conexao = self.conexoes[id_conexao] = Conexao(self, id_conexao, seq_no)
+            conexao = self.conexoes[id_conexao] = self._start_connection(
+                id_conexao, segment)
 
             if self.callback:
                 self.callback(conexao)
@@ -69,14 +85,14 @@ class Servidor:
 
 
 class Conexao:
-    def __init__(self, servidor, id_conexao, seq_no):
+    def __init__(self, servidor, id_conexao, seq_no, ack_no):
         self.servidor = servidor
         self.id_conexao = id_conexao
         self.callback = None
         self.timer = None
         self.nao_confirmados = b''
-        self.seq_no = random.randint(1,0xfff)
-        self.ack_no = seq_no + 1
+        self.seq_no = seq_no
+        self.ack_no = ack_no
         self.send_base = seq_no
 
         self.first = True
@@ -92,18 +108,6 @@ class Conexao:
         self.janela = 1
         self.last_seq = None
         self.closing = False
-
-        self._start_connection()
-
-    def _start_connection(self):
-        src_addr, src_port, dst_addr, dst_port = self.id_conexao
-        cabecalho = make_header(dst_port, src_port,self.seq_no,self.ack_no,FLAGS_SYN | FLAGS_ACK)
-        cabecalho = fix_checksum(cabecalho, src_addr, dst_addr)
-        self.servidor.rede.enviar(cabecalho,src_addr)
-        self.seq_no += 1
-        self.send_base = self.seq_no
-        print(f'{src_addr}:{src_port}', 'connected with', f'{dst_addr}:{dst_port}')
-        print('handshaking: seq->',self.seq_no,'ack->',self.ack_no)
 
     def _start_timer(self):
         self._stop_timer()
