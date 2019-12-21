@@ -22,6 +22,25 @@ class Servidor:
         """
         self.callback = callback
 
+    def _close_connection(self, src_addr, dst_addr, segment):
+        src_port, dst_port, seq_no, ack_no, \
+            flags, _, _, _ = read_header(segment)
+
+        id_conexao = (src_addr, src_port, dst_addr, dst_port)
+
+        if (flags & FLAGS_FIN) == FLAGS_FIN and not self.conexoes[id_conexao].closing:
+            self.conexoes[id_conexao].closing = True
+
+            cabecalho = make_header(
+                dst_port, src_port, ack_no, seq_no + 1, FLAGS_FIN | FLAGS_ACK)
+            cabecalho = fix_checksum(cabecalho, dst_addr, src_addr)
+
+            self.rede.enviar(cabecalho, src_addr)
+        elif (flags & FLAGS_ACK) == FLAGS_ACK and self.conexoes[id_conexao].closing:
+            if DEBUG:
+                print(f'Fechada a conexão com {src_addr}:{src_port}')
+            self.conexoes.pop(id_conexao)
+
     def _rdt_rcv(self, src_addr, dst_addr, segment):
         src_port, dst_port, seq_no, ack_no, \
             flags, _, _, _ = read_header(segment)
@@ -40,7 +59,10 @@ class Servidor:
                 self.callback(conexao)
         elif id_conexao in self.conexoes:
             # Passa para a conexão adequada se ela já estiver estabelecida
-            self.conexoes[id_conexao]._rdt_rcv(seq_no, ack_no, flags, payload)
+            if (flags & FLAGS_FIN) == FLAGS_FIN or self.conexoes[id_conexao].closing:
+                self._close_connection(src_addr, dst_addr,segment)
+            else:
+                self.conexoes[id_conexao]._rdt_rcv(seq_no, ack_no, flags, payload)
         else:
             print('%s:%d -> %s:%d (pacote associado a conexão desconhecida)' %
                   (src_addr, src_port, dst_addr, dst_port))
@@ -144,18 +166,7 @@ class Conexao:
             self.retransmitindo = False
             self.ack_no += len(payload)
 
-            if (flags & FLAGS_FIN) == FLAGS_FIN and not self.closing:
-                self.closing = True
-                self.ack_no += 1 # É preciso somar, pois quando é enviada a flag FIN não há payload
-                cabecalho = make_header(dst_port, src_port,self.seq_no,self.ack_no,FLAGS_FIN | FLAGS_ACK)
-                cabecalho = fix_checksum(cabecalho, src_addr, dst_addr)
-                self.servidor.rede.enviar(cabecalho, dst_addr)
-                return
-
-            elif (flags & FLAGS_ACK) == FLAGS_ACK and self.closing:
-                self.servidor.conexoes.pop(self.id_conexao)
-
-            if len(payload) > 0: # Só Deus sabe, mas funciona
+            if len(payload) > 0:  # Só Deus sabe, mas funciona
                 dados = make_header(src_port, dst_port, self.seq_no, self.ack_no, flags)
                 dados = fix_checksum(dados, src_addr,dst_addr)
                 self.servidor.rede.enviar(dados,src_addr)
