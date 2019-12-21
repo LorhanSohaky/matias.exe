@@ -1,4 +1,5 @@
 import re
+import traceback
 
 
 class CamadaEnlace:
@@ -84,6 +85,5 @@ class Enlace:
                 try:
                     self.callback(datagrama)
                 except:
-                    import traceback
                     traceback.print_exc()
         self.dados = dados_tmp[position:]
