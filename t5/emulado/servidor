@@ -18,6 +18,7 @@ DEBUG = True
 regex_nick = r'^/nick\s([^: ]+)$'
 regex_simple = r'^/nick\s(.+)$'
 
+
 class Server:
     def __init__(self):
         self.clientes = {}
@@ -25,9 +26,9 @@ class Server:
         if DEBUG:
             print('Iniciando servidor!')
 
-    def dados_recebidos(self,conexao, dados):
+    def dados_recebidos(self, conexao, dados):
         if DEBUG:
-            print(conexao, 'recebido',dados)
+            print(conexao, 'recebido', dados)
         if dados == b'':
             if DEBUG:
                 src_addr, src_port, _, _ = conexao.id_conexao
@@ -36,7 +37,6 @@ class Server:
             username = self.clientes[conexao].get('username')
 
             del self.clientes[conexao]
-            conexao.fechar()
 
             if username:
                 msg = f'/quit {username}'
@@ -51,11 +51,12 @@ class Server:
 
     def conexao_aceita(self, conexao):
         self.clientes[conexao] = {'entrada': '', 'saida': '', 'username': None}
-        conexao.registrar_recebedor(self.dados_recebidos)   # usa esse mesmo recebedor para toda conexão aceita
+        # usa esse mesmo recebedor para toda conexão aceita
+        conexao.registrar_recebedor(self.dados_recebidos)
 
     def broadcast(self, msg):
         msg_encoded = msg.encode()
-        
+
         for conexao in self.clientes:
             conexao.enviar(msg_encoded)
 
@@ -77,16 +78,17 @@ class Server:
             print(f'Line {index}: {linha.encode()}')
             if '\n' in linha:
                 linha = linha.rstrip()
-                matches_simple = re.search(regex_simple,linha)
+                matches_simple = re.search(regex_simple, linha)
                 if matches_simple:
                     matches_nick = re.search(regex_nick, linha, re.MULTILINE)
                     if matches_nick:
                         username_novo = matches_nick.group(1)
-                        
+
                         if username_novo in usernames:
                             conexao.enviar('/error\n'.encode())
                         elif username_atual:
-                            self.broadcast(f'/renamed {username_atual} {username_novo}\n')
+                            self.broadcast(
+                                f'/renamed {username_atual} {username_novo}\n')
                         else:
                             self.broadcast(f'/joined {username_novo}\n')
 
