@@ -41,8 +41,6 @@ class Servidor:
         elif id_conexao in self.conexoes:
             # Passa para a conexão adequada se ela já estiver estabelecida
             self.conexoes[id_conexao]._rdt_rcv(seq_no, ack_no, flags, payload)
-            if (flags & FLAGS_FIN) == FLAGS_FIN:
-                self.conexoes.pop(id_conexao)
         else:
             print('%s:%d -> %s:%d (pacote associado a conexão desconhecida)' %
                   (src_addr, src_port, dst_addr, dst_port))
@@ -71,6 +69,7 @@ class Conexao:
         self.nao_enviados = b''
         self.janela = 1
         self.last_seq = None
+        self.closing = False
 
         self._start_connection()
 
@@ -145,11 +144,18 @@ class Conexao:
             self.retransmitindo = False
             self.ack_no += len(payload)
 
-            if (flags & FLAGS_FIN) == FLAGS_FIN:
+            if (flags & FLAGS_FIN) == FLAGS_FIN and not self.closing:
+                self.closing = True
                 self.ack_no += 1 # É preciso somar, pois quando é enviada a flag FIN não há payload
-                flags = FLAGS_FIN | FLAGS_ACK
+                cabecalho = make_header(dst_port, src_port,self.seq_no,self.ack_no,FLAGS_FIN | FLAGS_ACK)
+                cabecalho = fix_checksum(cabecalho, src_addr, dst_addr)
+                self.servidor.rede.enviar(cabecalho, dst_addr)
+                return
 
-            if ((flags & FLAGS_FIN) == FLAGS_FIN) or len(payload) > 0: # Só Deus sabe, mas funciona
+            elif (flags & FLAGS_ACK) == FLAGS_ACK and self.closing:
+                self.servidor.conexoes.pop(self.id_conexao)
+
+            if len(payload) > 0: # Só Deus sabe, mas funciona
                 dados = make_header(src_port, dst_port, self.seq_no, self.ack_no, flags)
                 dados = fix_checksum(dados, src_addr,dst_addr)
                 self.servidor.rede.enviar(dados,src_addr)
