@@ -4,10 +4,6 @@
 #
 # sudo iptables -I OUTPUT -p tcp --tcp-flags RST RST -j DROP
 
-
-# Este é um exemplo de um programa que faz eco, ou seja, envia de volta para
-# o cliente tudo que for recebido em uma conexão.
-
 import asyncio
 from camadarede import CamadaRedeLinux
 from mytcp import Servidor as Tcp
