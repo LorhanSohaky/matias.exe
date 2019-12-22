@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+import asyncio
+from camadarede import CamadaRedeLinux
+from mytcp import Cliente as Tcp
+
+DEBUG = True
+
+
+class Client:
+    def __init__(self):
+        self.conexao = None
+        if DEBUG:
+            print('Iniciando cliente!')
+
+    def dados_recebidos(self, conexao, dados):
+        if DEBUG:
+            print(self.conexao, 'recebido', dados)
+        if dados == b'':
+            if DEBUG:
+                src_addr, src_port, _, _ = self.conexao.id_conexao
+                print('Conexão fechada pelo servidor',
+                      f'{src_addr}:{src_port}')
+            exit(1)
+        else:
+            dados_decodificados = dados.decode()
+            print(dados_decodificados, end='')
+
+    def conexao_aceita(self, conexao):
+        print('Conexao aceita')
+        self.conexao = conexao
+        self.conexao.registrar_recebedor(self.dados_recebidos)
+        self.dados_enviados()
+
+    async def dados_enviados(self):
+        while True:
+            entrada = await input(">>> ")
+
+            if entrada == '\\exit':
+                self.conexao.fechar()
+            elif len(entrada) > 0:
+                print(self.conexao)
+
+                self.conexao.enviar(entrada.encode())
+
+
+cliente = Client()
+rede = CamadaRedeLinux()
+tcp = Tcp(rede, 4444)
+tcp.registrar_monitor_de_conexoes_aceitas(cliente.conexao_aceita)
+tcp.start_connection('127.0.0.1', 7000)
+asyncio.get_event_loop().run_forever()
