@@ -126,7 +126,7 @@ class Cliente:
             self.rede.enviar(cabecalho, src_addr)
 
             self.conexao = Conexao(
-                self, (dst_addr, dst_port, src_addr, src_port), seq_no, ack_no)
+                self, id_conexao, seq_no, ack_no)
 
             self.status_conexao = 2
 
