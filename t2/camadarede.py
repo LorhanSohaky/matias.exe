@@ -10,7 +10,10 @@ from mytcputils import *
 
 class CamadaRedeLinux:
     def __init__(self):
-        self.fd = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
+        self.fd = socket.socket(
+            socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
+        self.meu_endereco = self.fd.getsockname()[0]
+        self.minha_porta = self.fd.getsockname()[1]
         asyncio.get_event_loop().add_reader(self.fd, self.__raw_recv)
         self.callback = None
 
@@ -24,8 +27,10 @@ class CamadaRedeLinux:
         return src_addr, dst_addr, segment
 
     def __raw_recv(self):
-        packet = self.fd.recv(12000)  # número suficientemente grande para a maioria das camadas de enlace
-        src_addr, dst_addr, segment = CamadaRedeLinux.__handle_ipv4_header(packet)
+        # número suficientemente grande para a maioria das camadas de enlace
+        packet = self.fd.recv(12000)
+        src_addr, dst_addr, segment = CamadaRedeLinux.__handle_ipv4_header(
+            packet)
 
         if self.callback:
             self.callback(src_addr, dst_addr, segment)
