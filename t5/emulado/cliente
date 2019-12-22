@@ -31,15 +31,12 @@ class Client:
         self.conexao.registrar_recebedor(self.dados_recebidos)
         self.dados_enviados()
 
-    async def dados_enviados(self):
-        while True:
-            entrada = await input(">>> ")
-
-            if entrada == '\\exit':
+    def dados_enviados(self):
+        entradas = ['/nick lorhan\n', 'oi\n', '/quit\n']
+        for entrada in entradas:
+            if entrada == '/quit\n':
                 self.conexao.fechar()
-            elif len(entrada) > 0:
-                print(self.conexao)
-
+            else:
                 self.conexao.enviar(entrada.encode())
 
 
