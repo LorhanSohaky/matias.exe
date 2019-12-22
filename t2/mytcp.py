@@ -63,6 +63,86 @@ class Servidor:
                   (src_addr, src_port, dst_addr, dst_port))
 
 
+class Cliente:
+    def __init__(self, rede, porta):
+        self.rede = rede
+        self.porta = porta
+        self.conexao = None
+        self.callback = None
+        self.rede.registrar_recebedor(self._rdt_rcv)
+        self.id_conexao = None
+        self.status_conexao = None
+        # 0 = Não conectado
+        # 1 = Conectando
+        # 2 = Conectado
+    
+    def enviar(self, dados):
+        self.conexao.enviar(dados)
+
+    def registrar_monitor_de_conexoes_aceitas(self, callback):
+        """
+        Usado pela camada de aplicação para registrar uma função para ser chamada
+        sempre que uma nova conexão for aceita
+        """
+        self.callback = callback
+
+    def start_connection(self, dst_addr, dst_port):
+        src_addr = self.rede.meu_endereco
+        src_port = self.porta
+
+        ack_no = 0
+        seq_no = 0
+        
+        cabecalho = make_header(
+            src_port, dst_port, seq_no, ack_no, FLAGS_SYN)
+        cabecalho = fix_checksum(cabecalho, src_addr, dst_addr)
+        self.rede.enviar(cabecalho, dst_addr)
+        print(f'{src_addr}:{src_port}',
+              'connecting with', f'{dst_addr}:{dst_port}')
+        print('handshaking: seq->', seq_no, 'ack->', ack_no)
+        self.status_conexao = 1
+
+    def _rdt_rcv(self, src_addr, dst_addr, segment):
+        src_port, dst_port, seq_no, ack_no, \
+            flags, _, _, _ = read_header(segment)
+
+        if dst_port != self.porta:
+            # Ignora segmentos que não são destinados à porta do nosso servidor
+            return
+
+        payload = segment[4*(flags >> 12):]
+        id_conexao = (src_addr, src_port, dst_addr, dst_port)
+
+        if (flags & FLAGS_SYN) == FLAGS_SYN and self.status_conexao == 1:
+            tmp = ack_no
+            ack_no = seq_no + 1
+            seq_no = tmp
+
+            self.id_conexao = id_conexao
+
+            cabecalho = make_header(
+                dst_port, src_port, seq_no, ack_no, FLAGS_ACK)
+            cabecalho = fix_checksum(cabecalho, src_addr, dst_addr)
+            self.rede.enviar(cabecalho, src_addr)
+
+            self.conexao = Conexao(
+                self, (dst_addr, dst_port, src_addr, src_port), seq_no, ack_no)
+
+            self.status_conexao = 2
+
+            if self.callback:
+                self.callback(self.conexao)
+        elif id_conexao == self.id_conexao and self.status_conexao == 2:
+            # Passa para a conexão adequada se ela já estiver estabelecida
+            self.conexao._rdt_rcv(seq_no, ack_no, flags, payload)
+        elif self.status_conexao != 2:
+            print('%s:%d -> %s:%d (conexão não estabelecida)' %
+                  (src_addr, src_port, dst_addr, dst_port))
+        else:
+            print('%s:%d -> %s:%d (pacote associado a conexão desconhecida)' %
+                  (src_addr, src_port, dst_addr, dst_port))
+
+
 class Conexao:
     def __init__(self, servidor, id_conexao, seq_no, ack_no):
         self.servidor = servidor
@@ -232,7 +312,7 @@ class Conexao:
                 self._send_ack_segment(msg)
 
 
-    def _send_ack_segment(self,payload):
+    def _send_ack_segment(self, payload):
         src_addr, src_port, dst_addr, dst_port = self.id_conexao
         seq_no = None
         if self.retransmitindo:
